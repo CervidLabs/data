@@ -1,239 +1,468 @@
-import fs from 'fs';
-import path from 'path';
-import { CSVExporter } from '../exporters/csv.js';
-import { JSONExporter } from '../exporters/json.js';
-import { TXTExporter } from '../exporters/txt.js';
+import fs from "fs";
+import path from "path";
+import { CSVExporter } from "../exporters/csv.js";
+import { JSONExporter } from "../exporters/json.js";
+import { TXTExporter } from "../exporters/txt.js";
 
 export class DataFrame {
-  constructor(config = {}) {
-    // Si config es una instancia, extraemos sus datos
-    const data = config instanceof DataFrame ? config : config;
+	constructor(config = {}) {
+		// Si config es una instancia, extraemos sus datos
+		const data = config instanceof DataFrame ? config : config;
 
-    this.columns = data.columns || {};
-    this.rowCount = data.rowCount || 0;
-    
-    // 🚨 REGLA DE ORO: Si hay nuevas columnas en 'columns', 
-    // pero no están en 'headers', las sincronizamos.
-    this.headers = data.headers || Object.keys(this.columns);
+		this.columns = data.columns || {};
+		this.rowCount = data.rowCount || 0;
 
-    // Herencia Nitro
-    this.originalBuffer = data.originalBuffer || null;
-    this.offsets = data.offsets || null;
-    this.numCols = data.numCols || 0;
-    this.colMap = data.colMap || null;
-    this.metadata = data.metadata || { indexers: {} };
-  }
-  // ⚡ FILTER NITRO: Mantiene el linaje Nitro
-  filter(inputs, predicate) {
-    const indices = new Int32Array(this.rowCount);
-    let count = 0;
-    const inputCols = inputs.map(name => {
-      if (!this.columns[name]) throw new Error(`Filtro: Columna '${name}' no encontrada`);
-      return this.columns[name];
-    });
+		// 🚨 REGLA DE ORO: Si hay nuevas columnas en 'columns',
+		// pero no están en 'headers', las sincronizamos.
+		this.headers = data.headers || Object.keys(this.columns);
 
-    for (let i = 0; i < this.rowCount; i++) {
-      const args = inputCols.map(col => col[i]);
-      if (predicate(...args)) indices[count++] = i;
-    }
+		// Herencia Nitro
+		this.originalBuffer = data.originalBuffer || null;
+		this.offsets = data.offsets || null;
+		this.numCols = data.numCols || 0;
+		this.colMap = data.colMap || null;
+		this.metadata = data.metadata || { indexers: {} };
+	}
+/**
+     * MÉTODO ESTÁTICO: Convierte un array de objetos [{}, {}] 
+     * a una instancia de DataFrame.
+     */
+    static fromObjects(data) {
+        if (!data || data.length === 0) {
+            return new DataFrame({ columns: {}, rowCount: 0, headers: [] });
+        }
 
-    const newColumns = {};
-    for (const h of this.headers) {
-      const oldCol = this.columns[h];
-      const newCol = new Float64Array(count);
-      for (let j = 0; j < count; j++) newCol[j] = oldCol[indices[j]];
-      newColumns[h] = newCol;
-    }
+        const headers = Object.keys(data[0]);
+        const columns = {};
+        const rowCount = data.length;
 
-    // 🚨 Retornamos heredando el contexto Nitro (originalBuffer y offsets)
-    return new DataFrame({
-      ...this,
-      columns: newColumns,
-      rowCount: count
-    });
-  }
-
-  // 🏷️ WITH_LABEL: Sincroniza el Indexer con los bytes originales
-  with_label(specs) {
-    const newColumns = { ...this.columns };
-    const newMetadata = { ...this.metadata, indexers: { ...this.metadata.indexers } };
-
-    for (const spec of specs) {
-      const { input, indexer } = spec;
-      const targetName = `${input}_indexed`;
-      
-      // fitTransform usa los offsets para "ver" el texto en el buffer
-      const indexedCol = indexer.fitTransform(this, input); 
-      
-      newColumns[targetName] = indexedCol;
-      newMetadata.indexers[input] = indexer;
-    }
-
-    return new DataFrame({ ...this, columns: newColumns, metadata: newMetadata });
-  }
-
-    // 🔧 WITH_COLUMNS: Feature Engineering de alta velocidad
-  with_columns(specs) {
-      const newColumns = { ...this.columns };
-      const newHeaders = [...this.headers];
-
-      for (const spec of specs) {
-        const target = new Float64Array(this.rowCount);
-        const inputCols = spec.inputs.map(name => {
-          if (!this.columns[name]) throw new Error(`Columna no encontrada: ${name}`);
-          return this.columns[name];
+        headers.forEach(h => {
+            const sample = data[0][h];
+            
+            // Nitro Tip: Si es número, usamos Float64Array para mantener la velocidad
+            if (typeof sample === 'number') {
+                const col = new Float64Array(rowCount);
+                for (let i = 0; i < rowCount; i++) {
+                    col[i] = data[i][h] || 0;
+                }
+                columns[h] = col;
+            } else {
+                // Si es texto, usamos Array estándar
+                columns[h] = data.map(row => row[h]);
+            }
         });
 
+        return new DataFrame({ columns, rowCount, headers });
+    }
+	// 🏷️ WITH_LABEL: Sincroniza el Indexer con los bytes originales
+	with_label(specs) {
+		const newColumns = { ...this.columns };
+		const newMetadata = {
+			...this.metadata,
+			indexers: { ...this.metadata.indexers },
+		};
+
+		for (const spec of specs) {
+			const { input, indexer } = spec;
+			const targetName = `${input}_indexed`;
+
+			// fitTransform usa los offsets para "ver" el texto en el buffer
+			const indexedCol = indexer.fitTransform(this, input);
+
+			newColumns[targetName] = indexedCol;
+			newMetadata.indexers[input] = indexer;
+		}
+
+		return new DataFrame({
+			...this,
+			columns: newColumns,
+			metadata: newMetadata,
+		});
+	}
+
+	// 🔧 WITH_COLUMNS: Feature Engineering de alta velocidad
+	// Dentro de with_columns en DataFrame.js
+	with_columns(specs) {
+		const newColumns = { ...this.columns };
+		const newHeaders = [...this.headers];
+
+		for (const spec of specs) {
+			const { name, inputs, formula } = spec;
+
+			// Ejecutamos la primera fila para detectar el tipo de dato
+			const inputVals = inputs.map((h) => this.columns[h][0]);
+			const sampleOutput = formula(...inputVals);
+
+			let colData;
+			if (typeof sampleOutput === "number") {
+				colData = new Float64Array(this.rowCount);
+			} else {
+				colData = new Array(this.rowCount); // Para texto
+			}
+
+			// Llenar la columna
+			for (let i = 0; i < this.rowCount; i++) {
+				const rowInputs = inputs.map((h) => this.columns[h][i]);
+				colData[i] = formula(...rowInputs);
+			}
+
+			newColumns[name] = colData;
+			if (!newHeaders.includes(name)) newHeaders.push(name);
+		}
+
+		return new DataFrame({ ...this, columns: newColumns, headers: newHeaders });
+	}
+	show(n = 5) {
+		const limit = Math.min(n, this.rowCount);
+		const tableData = [];
+
+		for (let i = 0; i < limit; i++) {
+			const row = {};
+			for (const header of this.headers) {
+				let val = this.columns[header][i];
+				// Truncar motivaciones largas para que la tabla no se rompa
+				if (typeof val === "string" && val.length > 30) {
+					val = val.substring(0, 27) + "...";
+				}
+				row[header] = val;
+			}
+			tableData.push(row);
+		}
+
+		console.table(tableData);
+	}
+	async write(path) {
+		const stream = fs.createWriteStream(path);
+		// Escribir cabeceras
+		stream.write(this.headers.join(",") + "\n");
+
+		// Escribir filas
+		for (let i = 0; i < this.rowCount; i++) {
+			const row = this.headers.map((h) => {
+				const val = this.columns[h][i];
+				// Si es un número muy grande o timestamp, lo dejamos como está
+				// Si es un float, limitamos decimales para que el CSV no pese tanto
+				return Number.isInteger(val) ? val : val.toFixed(4);
+			});
+			stream.write(row.join(",") + "\n");
+		}
+
+		return new Promise((resolve) => stream.on("finish", resolve).end());
+	}
+
+	// ==================== AGREGACIONES & UTILIDADES ====================
+
+	groupByRange(colName, targetCol, maxRange) {
+		const groupCounts = new Uint32Array(maxRange);
+		const groupSums = new Float64Array(maxRange);
+		const keys = this.columns[colName];
+		const values = this.columns[targetCol];
+
+		if (!keys || !values) return [];
+
+		for (let i = 0; i < this.rowCount; i++) {
+			const key = Math.floor(keys[i]);
+			// 🛡️ Protección contra IDs fuera de rango (como el 980414)
+			if (key >= 0 && key < maxRange) {
+				groupCounts[key]++;
+				groupSums[key] += values[i];
+			}
+		}
+
+		return Array.from({ length: maxRange }, (_, i) => ({
+			group: i,
+			avg: groupCounts[i] > 0 ? groupSums[i] / groupCounts[i] : 0,
+		}))
+			.filter((r) => r.avg > 0)
+			.sort((a, b) => b.avg - a.avg);
+	}
+	/**
+	 * FILTRADO: Retorna un nuevo DataFrame con las filas que cumplen la condición.
+	 */
+	filter(inputs, predicate) {
+		const indices = [];
+
+		// 1. Identificar qué filas pasan el filtro
+		for (let i = 0; i < this.rowCount; i++) {
+			const rowInputs = inputs.map((h) => this.columns[h][i]);
+			if (predicate(...rowInputs)) {
+				indices.push(i);
+			}
+		}
+
+		// 2. Reconstruir columnas con los nuevos índices
+		const newColumns = {};
+		for (const h of this.headers) {
+			const oldCol = this.columns[h];
+			const isTyped = oldCol instanceof Float64Array;
+
+			const newCol = isTyped
+				? new Float64Array(indices.length)
+				: new Array(indices.length);
+
+			for (let j = 0; j < indices.length; j++) {
+				newCol[j] = oldCol[indices[j]];
+			}
+			newColumns[h] = newCol;
+		}
+
+		return new DataFrame({
+			...this,
+			columns: newColumns,
+			rowCount: indices.length,
+		});
+	}
+/**
+     * GROUP BY: Agrupa por una columna y aplica agregaciones.
+     * @param {string} groupCol - Columna para agrupar (ej: 'category')
+     * @param {Object} aggs - Agregaciones (ej: { year: 'count', price: 'mean' })
+     */
+    groupBy(groupCol, aggs = {}) {
+        const groups = new Map();
+        const targetData = this.columns[groupCol];
+
+        // 1. Fase de Hash: Agrupar índices por valor único
         for (let i = 0; i < this.rowCount; i++) {
-          const args = inputCols.map(col => col[i]);
-          target[i] = spec.formula(...args);
+            const val = targetData[i];
+            if (!groups.has(val)) {
+                groups.set(val, []);
+            }
+            groups.get(val).push(i);
         }
 
-        newColumns[spec.name] = target;
-        // 🚨 REGISTRAMOS LA NUEVA COLUMNA EN HEADERS
-        if (!newHeaders.includes(spec.name)) newHeaders.push(spec.name);
-      }
+        // 2. Fase de Agregación
+        const resultRows = [];
+        for (const [groupVal, indices] of groups.entries()) {
+            const row = { [groupCol]: groupVal };
 
-      // Devolvemos una instancia con TODA la información
-      return new DataFrame({
-        columns: newColumns,
-        headers: newHeaders,
-        rowCount: this.rowCount,
-        originalBuffer: this.originalBuffer,
-        offsets: this.offsets,
-        numCols: this.numCols,
-        colMap: this.colMap,
-        metadata: this.metadata
-      });
+            for (const [colName, op] of Object.entries(aggs)) {
+                const colToAgg = this.columns[colName];
+                const values = indices.map(idx => colToAgg[idx]);
+
+                if (op === 'sum') {
+                    row[colName] = values.reduce((a, b) => a + b, 0);
+                } else if (op === 'mean') {
+                    row[colName] = values.reduce((a, b) => a + b, 0) / values.length;
+                } else if (op === 'count') {
+                    row[colName] = values.length;
+                } else if (op === 'max') {
+                    row[colName] = Math.max(...values);
+                } else if (op === 'min') {
+                    row[colName] = Math.min(...values);
+                }
+            }
+            resultRows.push(row);
+        }
+
+        // Retornar un nuevo DataFrame con los resultados agregados
+        return DataFrame.fromObjects(resultRows);
     }
+	/**
+	 * ORDENAMIENTO: Ordena el DataFrame basado en una columna.
+	 */
+	sort(columnName, ascending = true) {
+		// 1. Crear un array de índices [0, 1, 2... n]
+		const indices = Array.from({ length: this.rowCount }, (_, i) => i);
+		const targetCol = this.columns[columnName];
 
-  async write(path) {
-      const stream = fs.createWriteStream(path);
-      // Escribir cabeceras
-      stream.write(this.headers.join(',') + '\n');
+		// 2. Ordenar los índices basándonos en los valores de la columna objetivo
+		indices.sort((a, b) => {
+			const valA = targetCol[a];
+			const valB = targetCol[b];
 
-      // Escribir filas
-      for (let i = 0; i < this.rowCount; i++) {
-          const row = this.headers.map(h => {
-              const val = this.columns[h][i];
-              // Si es un número muy grande o timestamp, lo dejamos como está
-              // Si es un float, limitamos decimales para que el CSV no pese tanto
-              return Number.isInteger(val) ? val : val.toFixed(4);
-          });
-          stream.write(row.join(',') + '\n');
-      }
-      
-      return new Promise((resolve) => stream.on('finish', resolve).end());
-  }
+			if (valA < valB) return ascending ? -1 : 1;
+			if (valA > valB) return ascending ? 1 : -1;
+			return 0;
+		});
 
-  // ==================== AGREGACIONES & UTILIDADES ====================
+		// 3. Reordenar todas las columnas usando el nuevo mapa de índices
+		const newColumns = {};
+		for (const h of this.headers) {
+			const oldCol = this.columns[h];
+			const isTyped = oldCol instanceof Float64Array;
+			const newCol = isTyped
+				? new Float64Array(this.rowCount)
+				: new Array(this.rowCount);
 
-  groupByRange(colName, targetCol, maxRange) {
-    const groupCounts = new Uint32Array(maxRange);
-    const groupSums = new Float64Array(maxRange);
-    const keys = this.columns[colName];
-    const values = this.columns[targetCol];
+			for (let j = 0; j < this.rowCount; j++) {
+				newCol[j] = oldCol[indices[j]];
+			}
+			newColumns[h] = newCol;
+		}
 
-    if (!keys || !values) return [];
+		return new DataFrame({ ...this, columns: newColumns });
+	}
+	groupByID(colName, targetCol) {
+		return this.groupByRange(colName, targetCol, 300);
+	}
 
-    for (let i = 0; i < this.rowCount; i++) {
-        const key = Math.floor(keys[i]);
-        // 🛡️ Protección contra IDs fuera de rango (como el 980414)
-        if (key >= 0 && key < maxRange) {
-            groupCounts[key]++;
-            groupSums[key] += values[i];
+	sum(col) {
+		const data = this.columns[col];
+		if (!data) return 0;
+		let total = 0;
+		for (let i = 0; i < this.rowCount; i++) total += data[i];
+		return total;
+	}
+
+	mean(col) {
+		return this.rowCount === 0 ? 0 : this.sum(col) / this.rowCount;
+	}
+
+	max(col) {
+		const data = this.getCol(col);
+		if (!data) return null;
+		let maxVal = -Infinity;
+		const len = this.rowCount;
+		for (let i = 0; i < len; i++) {
+			if (data[i] > maxVal) maxVal = data[i];
+		}
+		return maxVal;
+	}
+
+	min(col) {
+		const data = this.getCol(col);
+		if (!data) return null;
+		let minVal = Infinity;
+		const len = this.rowCount;
+		for (let i = 0; i < len; i++) {
+			if (data[i] < minVal) minVal = data[i];
+		}
+		return minVal;
+	}
+
+	// ==================== UTILIDADES & EXPORTACIÓN ====================
+
+	info() {
+		return {
+			rowCount: this.rowCount,
+			columnCount: this.headers.length,
+			columns: this.headers,
+			memoryUsage: `${((this.rowCount * this.headers.length * 8) / 1024 / 1024).toFixed(2)} MB`,
+		};
+	}
+
+	fromArray(data) {
+		if (!data || data.length === 0) return this;
+		this.headers = Object.keys(data[0]);
+		this.rowCount = data.length;
+
+		this.headers.forEach((h) => {
+			this.columns[h] = new Float64Array(
+				new SharedArrayBuffer(this.rowCount * 8),
+			);
+			for (let i = 0; i < this.rowCount; i++) {
+				this.columns[h][i] = data[i][h];
+			}
+		});
+		return this;
+	}
+
+	toArray() {
+		const result = [];
+		for (let i = 0; i < this.rowCount; i++) {
+			result.push(this._getRow(i));
+		}
+		return result;
+	}
+
+	async toCSV(outputPath, options = {}) {
+		const exporter = new CSVExporter(this, options);
+		return await exporter.export(outputPath);
+	}
+
+	async toJSON(outputPath, options = {}) {
+		const exporter = new JSONExporter(this, options);
+		return await exporter.export(outputPath);
+	}
+
+	async toTXT(outputPath, options = {}) {
+		const exporter = new TXTExporter(this, options);
+		return await exporter.export(outputPath);
+	}
+/**
+     * DESCRIBE: Genera estadísticas descriptivas de las columnas numéricas.
+     */
+describe() {
+        const stats = [];
+        for (const h of this.headers) {
+            const col = this.columns[h];
+            
+            // 1. Convertir a números y filtrar lo que no sea numérico
+            const numericValues = Array.from(col)
+                .map(v => parseFloat(v))
+                .filter(v => !isNaN(v));
+
+            // 2. Si no hay números en esta columna, saltar a la siguiente
+            if (numericValues.length === 0) continue;
+
+            const sorted = [...numericValues].sort((a, b) => a - b);
+            const count = numericValues.length;
+            const sum = numericValues.reduce((a, b) => a + b, 0);
+            const mean = sum / count;
+            
+            stats.push({
+                column: h,
+                count: count,
+                mean: mean.toFixed(2),
+                min: sorted[0],
+                "25%": sorted[Math.floor(count * 0.25)],
+                "50%": sorted[Math.floor(count * 0.5)],
+                "75%": sorted[Math.floor(count * 0.75)],
+                max: sorted[count - 1]
+            });
+        }
+
+        if (stats.length === 0) {
+            console.log("No numeric columns found to describe.");
+        } else {
+            console.table(stats);
         }
     }
 
-    return Array.from({ length: maxRange }, (_, i) => ({
-        group: i,
-        avg: groupCounts[i] > 0 ? groupSums[i] / groupCounts[i] : 0
-    })).filter(r => r.avg > 0).sort((a, b) => b.avg - a.avg);
-  }
+    /**
+     * RENAME: Cambia los nombres de las columnas sin tocar los datos.
+     */
+    rename(mapping) {
+        const newColumns = {};
+        const newHeaders = this.headers.map(h => {
+            const newName = mapping[h] || h;
+            newColumns[newName] = this.columns[h];
+            return newName;
+        });
 
-  groupByID(colName, targetCol) {
-    return this.groupByRange(colName, targetCol, 300);
-  }
-
-  sum(col) {
-    const data = this.columns[col];
-    if (!data) return 0;
-    let total = 0;
-    for (let i = 0; i < this.rowCount; i++) total += data[i];
-    return total;
-  }
-
-  mean(col) {
-    return this.rowCount === 0 ? 0 : this.sum(col) / this.rowCount;
-  }
-
-  max(col) {
-    const data = this.getCol(col);
-    if (!data) return null;
-    let maxVal = -Infinity;
-    const len = this.rowCount;
-    for (let i = 0; i < len; i++) {
-      if (data[i] > maxVal) maxVal = data[i];
+        return new DataFrame({
+            ...this,
+            columns: newColumns,
+            headers: newHeaders,
+            colMap: Object.fromEntries(newHeaders.map((h, i) => [h, i]))
+        });
     }
-    return maxVal;
-  }
 
-  min(col) {
-    const data = this.getCol(col);
-    if (!data) return null;
-    let minVal = Infinity;
-    const len = this.rowCount;
-    for (let i = 0; i < len; i++) {
-      if (data[i] < minVal) minVal = data[i];
+    /**
+     * HEAD: Retorna un nuevo DataFrame con las primeras N filas.
+     */
+    head(n = 5) {
+        const limit = Math.min(n, this.rowCount);
+        const newColumns = {};
+        
+        for (const h of this.headers) {
+            newColumns[h] = this.columns[h].slice(0, limit);
+        }
+
+        return new DataFrame({ ...this, columns: newColumns, rowCount: limit });
     }
-    return minVal;
-  }
 
-  // ==================== UTILIDADES & EXPORTACIÓN ====================
+    /**
+     * TAIL: Retorna un nuevo DataFrame con las últimas N filas.
+     */
+    tail(n = 5) {
+        const start = Math.max(0, this.rowCount - n);
+        const newColumns = {};
+        
+        for (const h of this.headers) {
+            newColumns[h] = this.columns[h].slice(start, this.rowCount);
+        }
 
-  info() {
-    return {
-      rowCount: this.rowCount,
-      columnCount: this.headers.length,
-      columns: this.headers,
-      memoryUsage: `${((this.rowCount * this.headers.length * 8) / 1024 / 1024).toFixed(2)} MB`
-    };
-  }
-
-  fromArray(data) {
-    if (!data || data.length === 0) return this;
-    this.headers = Object.keys(data[0]);
-    this.rowCount = data.length;
-    
-    this.headers.forEach(h => {
-      this.columns[h] = new Float64Array(new SharedArrayBuffer(this.rowCount * 8));
-      for (let i = 0; i < this.rowCount; i++) {
-        this.columns[h][i] = data[i][h];
-      }
-    });
-    return this;
-  }
-
-  toArray() {
-    const result = [];
-    for (let i = 0; i < this.rowCount; i++) {
-      result.push(this._getRow(i));
+        return new DataFrame({ ...this, columns: newColumns, rowCount: this.rowCount - start });
     }
-    return result;
-  }
-
-  async toCSV(outputPath, options = {}) {
-    const exporter = new CSVExporter(this, options);
-    return await exporter.export(outputPath);
-  }
-
-  async toJSON(outputPath, options = {}) {
-    const exporter = new JSONExporter(this, options);
-    return await exporter.export(outputPath);
-  }
-
-  async toTXT(outputPath, options = {}) {
-    const exporter = new TXTExporter(this, options);
-    return await exporter.export(outputPath);
-  }
 }
