@@ -12,9 +12,6 @@ export class DataFrame {
 
 		this.columns = data.columns || {};
 		this.rowCount = data.rowCount || 0;
-
-		// 🚨 REGLA DE ORO: Si hay nuevas columnas en 'columns',
-		// pero no están en 'headers', las sincronizamos.
 		this.headers = data.headers || Object.keys(this.columns);
 
 		// Herencia Nitro
@@ -55,7 +52,6 @@ export class DataFrame {
 
 		return new DataFrame({ columns, rowCount, headers });
 	}
-	// 🏷️ WITH_LABEL: Sincroniza el Indexer con los bytes originales
 	with_label(specs) {
 		const newColumns = { ...this.columns };
 		const newMetadata = {
@@ -169,7 +165,6 @@ export class DataFrame {
 
 		for (let i = 0; i < this.rowCount; i++) {
 			const key = Math.floor(keys[i]);
-			// 🛡️ Protección contra IDs fuera de rango (como el 980414)
 			if (key >= 0 && key < maxRange) {
 				groupCounts[key]++;
 				groupSums[key] += values[i];
