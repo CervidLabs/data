@@ -1,4 +1,4 @@
-# 🐙 Octopus
+# 🐙 Octopus Data
 
 **High-Performance Data Engine for Node.js**
 
@@ -56,7 +56,7 @@ Octopus solves this by using **TypedArrays** for columnar storage, **SharedArray
 ## Installation
 
 ```bash
-npm install octopus
+npm install octopus-data
 ```
 
 ---
@@ -64,7 +64,7 @@ npm install octopus
 ## Quick Start
 
 ```javascript
-import { Octopus } from 'octopus';
+import { Octopus } from 'octopus-data';
 
 async function main() {
     const ds = await Octopus.read('./large_dataset.csv', { workers: 8 });
