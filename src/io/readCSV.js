@@ -1,6 +1,6 @@
-import fs from 'fs';
-import readline from 'readline';
-import { DataFrame } from '../core/DataFrame.js';
+import fs from "fs";
+import readline from "readline";
+import { DataFrame } from "../core/DataFrame.js";
 
 /**
  * Lee un archivo CSV y devuelve un DataFrame
@@ -13,128 +13,135 @@ import { DataFrame } from '../core/DataFrame.js';
  * @returns {Promise<DataFrame>}
  */
 export async function readCSV(filePath, options = {}) {
-  const {
-    delimiter = ',',
-    header = true,
-    encoding = 'utf8',
-    chunkSize = 10000
-  } = options;
+	const {
+		delimiter = ",",
+		header = true,
+		encoding = "utf8",
+		chunkSize = 10000,
+	} = options;
 
-  const df = new DataFrame();
-  df.filePath = filePath;
-  df.fileType = 'csv';
-  
-  const stream = fs.createReadStream(filePath, { encoding });
-  const rl = readline.createInterface({
-    input: stream,
-    crlfDelay: Infinity
-  });
+	const df = new DataFrame();
+	df.filePath = filePath;
+	df.fileType = "csv";
 
-  let headers = [];
-  let isFirstLine = true;
-  let rowCount = 0;
-  let batch = [];
+	const stream = fs.createReadStream(filePath, { encoding });
+	const rl = readline.createInterface({
+		input: stream,
+		crlfDelay: Infinity,
+	});
 
-  for await (const line of rl) {
-    if (!line.trim()) continue;
+	let headers = [];
+	let isFirstLine = true;
+	let rowCount = 0;
+	let batch = [];
 
-    const values = parseCSVLine(line, delimiter);
+	for await (const line of rl) {
+		if (!line.trim()) continue;
 
-    // Primera línea: headers
-    if (isFirstLine && header) {
-      headers = values;
-      df.columns = {};
-      headers.forEach(col => {
-        df.columns[col] = [];
-      });
-      isFirstLine = false;
-      continue;
-    }
+		const values = parseCSVLine(line, delimiter);
 
-    // Sin header: usar índices
-    if (isFirstLine && !header) {
-      headers = values.map((_, i) => `column_${i}`);
-      df.columns = {};
-      headers.forEach(col => {
-        df.columns[col] = [];
-      });
-      isFirstLine = false;
-    }
+		// Primera línea: headers
+		if (isFirstLine && header) {
+			headers = values;
+			df.columns = {};
+			headers.forEach((col) => {
+				df.columns[col] = [];
+			});
+			isFirstLine = false;
+			continue;
+		}
 
-    // Procesar fila
-    headers.forEach((header, i) => {
-      let value = values[i] || '';
-      
-      // Intentar parsear números
-      if (value !== '' && !isNaN(value) && value !== 'null' && value !== 'undefined') {
-        const num = Number(value);
-        if (!isNaN(num) && value.trim() !== '') {
-          value = num;
-        }
-      }
-      
-      df.columns[header].push(value);
-    });
+		// Sin header: usar índices
+		if (isFirstLine && !header) {
+			headers = values.map((_, i) => `column_${i}`);
+			df.columns = {};
+			headers.forEach((col) => {
+				df.columns[col] = [];
+			});
+			isFirstLine = false;
+		}
 
-    rowCount++;
+		// Procesar fila
+		headers.forEach((header, i) => {
+			let value = values[i] || "";
 
-    // Limpiar batch cada cierto tiempo (liberar memoria)
-    if (batch.length >= chunkSize) {
-      batch = [];
-    }
-  }
+			// Intentar parsear números
+			if (
+				value !== "" &&
+				!isNaN(value) &&
+				value !== "null" &&
+				value !== "undefined"
+			) {
+				const num = Number(value);
+				if (!isNaN(num) && value.trim() !== "") {
+					value = num;
+				}
+			}
 
-  df.rowCount = rowCount;
-  console.log(`✅ CSV cargado: ${rowCount.toLocaleString()} filas, ${headers.length} columnas`);
-  
-  return df;
+			df.columns[header].push(value);
+		});
+
+		rowCount++;
+
+		// Limpiar batch cada cierto tiempo (liberar memoria)
+		if (batch.length >= chunkSize) {
+			batch = [];
+		}
+	}
+
+	df.rowCount = rowCount;
+	console.log(
+		`✅ CSV cargado: ${rowCount.toLocaleString()} filas, ${headers.length} columnas`,
+	);
+
+	return df;
 }
 
 /**
  * Parsea una línea de CSV respetando comillas
- * @param {string} line 
- * @param {string} delimiter 
+ * @param {string} line
+ * @param {string} delimiter
  * @returns {string[]}
  */
 function parseCSVLine(line, delimiter) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
-  let i = 0;
-  
-  while (i < line.length) {
-    const char = line[i];
-    
-    if (char === '"') {
-      inQuotes = !inQuotes;
-      i++;
-      continue;
-    }
-    
-    if (char === delimiter && !inQuotes) {
-      result.push(cleanValue(current));
-      current = '';
-      i++;
-      continue;
-    }
-    
-    current += char;
-    i++;
-  }
-  
-  result.push(cleanValue(current));
-  return result;
+	const result = [];
+	let current = "";
+	let inQuotes = false;
+	let i = 0;
+
+	while (i < line.length) {
+		const char = line[i];
+
+		if (char === '"') {
+			inQuotes = !inQuotes;
+			i++;
+			continue;
+		}
+
+		if (char === delimiter && !inQuotes) {
+			result.push(cleanValue(current));
+			current = "";
+			i++;
+			continue;
+		}
+
+		current += char;
+		i++;
+	}
+
+	result.push(cleanValue(current));
+	return result;
 }
 
 /**
  * Limpia el valor (remueve comillas al inicio/final)
- * @param {string} value 
+ * @param {string} value
  * @returns {string}
  */
 function cleanValue(value) {
-  value = value.trim();
-  if (value.startsWith('"') && value.endsWith('"')) {
-    value = value.slice(1, -1);
-  }
-  return value;
+	value = value.trim();
+	if (value.startsWith('"') && value.endsWith('"')) {
+		value = value.slice(1, -1);
+	}
+	return value;
 }

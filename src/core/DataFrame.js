@@ -82,36 +82,42 @@ export class DataFrame {
 	}
 
 	// 🔧 WITH_COLUMNS: Feature Engineering de alta velocidad
-with_columns(specs) {
-    const rowCount = this.rowCount;
-    for (const spec of specs) {
-        const newCol = new Float64Array(rowCount);
-        const formula = spec.formula;
-        const inputs = spec.inputs.map(name => this.columns[name]);
-        const numInputs = inputs.length;
+	with_columns(specs) {
+		const rowCount = this.rowCount;
+		for (const spec of specs) {
+			const newCol = new Float64Array(rowCount);
+			const formula = spec.formula;
+			const inputs = spec.inputs.map((name) => this.columns[name]);
+			const numInputs = inputs.length;
 
-        // ACCESO DIRECTO: Evitamos crear arrays o usar 'map' dentro del bucle
-        if (numInputs === 1) {
-            const col0 = inputs[0];
-            for (let i = 0; i < rowCount; i++) newCol[i] = formula(col0[i]);
-        } else if (numInputs === 2) {
-            const col0 = inputs[0], col1 = inputs[1];
-            for (let i = 0; i < rowCount; i++) newCol[i] = formula(col0[i], col1[i]);
-        } else if (numInputs === 4) {
-            const col0 = inputs[0], col1 = inputs[1], col2 = inputs[2], col3 = inputs[3];
-            for (let i = 0; i < rowCount; i++) newCol[i] = formula(col0[i], col1[i], col2[i], col3[i]);
-        } else {
-            // Caso general (fallback)
-            for (let i = 0; i < rowCount; i++) {
-                const args = new Array(numInputs);
-                for(let j=0; j < numInputs; j++) args[j] = inputs[j][i];
-                newCol[i] = formula(...args);
-            }
-        }
-        this.columns[spec.name] = newCol;
-    }
-    return this;
-}
+			// ACCESO DIRECTO: Evitamos crear arrays o usar 'map' dentro del bucle
+			if (numInputs === 1) {
+				const col0 = inputs[0];
+				for (let i = 0; i < rowCount; i++) newCol[i] = formula(col0[i]);
+			} else if (numInputs === 2) {
+				const col0 = inputs[0],
+					col1 = inputs[1];
+				for (let i = 0; i < rowCount; i++)
+					newCol[i] = formula(col0[i], col1[i]);
+			} else if (numInputs === 4) {
+				const col0 = inputs[0],
+					col1 = inputs[1],
+					col2 = inputs[2],
+					col3 = inputs[3];
+				for (let i = 0; i < rowCount; i++)
+					newCol[i] = formula(col0[i], col1[i], col2[i], col3[i]);
+			} else {
+				// Caso general (fallback)
+				for (let i = 0; i < rowCount; i++) {
+					const args = new Array(numInputs);
+					for (let j = 0; j < numInputs; j++) args[j] = inputs[j][i];
+					newCol[i] = formula(...args);
+				}
+			}
+			this.columns[spec.name] = newCol;
+		}
+		return this;
+	}
 	show(n = 5) {
 		const limit = Math.min(n, this.rowCount);
 		const tableData = [];
@@ -376,32 +382,34 @@ with_columns(specs) {
 		}
 		return result;
 	}
-_validatePath(outputPath, requiredExt) {
-    const ext = path.extname(outputPath).toLowerCase();
-    if (!ext) return outputPath + requiredExt;
-    if (ext !== requiredExt) {
-        throw new Error(`Invalid extension: Output must be ${requiredExt} (received: ${ext})`);
-    }
-    return outputPath;
-}
+	_validatePath(outputPath, requiredExt) {
+		const ext = path.extname(outputPath).toLowerCase();
+		if (!ext) return outputPath + requiredExt;
+		if (ext !== requiredExt) {
+			throw new Error(
+				`Invalid extension: Output must be ${requiredExt} (received: ${ext})`,
+			);
+		}
+		return outputPath;
+	}
 
-async toCSV(outputPath, options = {}) {
-    const validatedPath = this._validatePath(outputPath, '.csv');
-    const exporter = new CSVExporter(this, options);
-    return await exporter.export(validatedPath);
-}
+	async toCSV(outputPath, options = {}) {
+		const validatedPath = this._validatePath(outputPath, ".csv");
+		const exporter = new CSVExporter(this, options);
+		return await exporter.export(validatedPath);
+	}
 
-async toJSON(outputPath, options = {}) {
-    const validatedPath = this._validatePath(outputPath, '.json');
-    const exporter = new JSONExporter(this, options);
-    return await exporter.export(validatedPath);
-}
+	async toJSON(outputPath, options = {}) {
+		const validatedPath = this._validatePath(outputPath, ".json");
+		const exporter = new JSONExporter(this, options);
+		return await exporter.export(validatedPath);
+	}
 
-async toTXT(outputPath, options = {}) {
-    const validatedPath = this._validatePath(outputPath, '.txt');
-    const exporter = new TXTExporter(this, options);
-    return await exporter.export(validatedPath);
-}
+	async toTXT(outputPath, options = {}) {
+		const validatedPath = this._validatePath(outputPath, ".txt");
+		const exporter = new TXTExporter(this, options);
+		return await exporter.export(validatedPath);
+	}
 	/**
 	 * DESCRIBE: Genera estadísticas descriptivas de las columnas numéricas.
 	 */
@@ -713,9 +721,9 @@ async toTXT(outputPath, options = {}) {
 		return DataFrame.fromObjects(joinedRows);
 	}
 	col(name) {
-    	if (!this.columns[name]) throw new Error(`Column ${name} not found`);
-		
-    	// Retornamos una instancia de Column vinculada a los datos reales
+		if (!this.columns[name]) throw new Error(`Column ${name} not found`);
+
+		// Retornamos una instancia de Column vinculada a los datos reales
 		return new Column(name, this.columns[name], this);
 	}
 }

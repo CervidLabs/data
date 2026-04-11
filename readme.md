@@ -1,40 +1,38 @@
-# 🐙 Octopus
+# Octopus
 
-**High-Performance Parallel Data Engine for Node.js**
+### The Bare-Metal Data Engine for Node.js
 
-[![Node.js Version](https://img.shields.io/node/v/octopus.svg?style=flat-square)](https://nodejs.org)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
-
-**Octopus** is a specialized, zero-copy data analysis engine designed to break the memory limits of the V8 runtime. Built on top of `SharedArrayBuffer` and hardware-level `Atomics`, it allows Node.js to ingest and query datasets exceeding 100GB with a near-constant memory footprint.
+**Octopus** is a high-performance, vectorized data analysis engine designed to bypass the V8 heap. By utilizing `SharedArrayBuffer` and hardware-level `Atomics`, Octopus enables Node.js to process massive datasets with **sub-second latency** and a **near-constant memory footprint**.
 
 ---
 
-## ⚡ Why Octopus?
+## Performance Beyond the Heap
 
-Most Node.js data libraries (like standard JSON parsers or CSV-to-object mappers) fail at scale because they saturate the **V8 Heap** and trigger aggressive **Garbage Collection (GC)** cycles. Octopus bypasses the heap entirely.
+Standard Node.js libraries treat data as objects, leading to frequent **Garbage Collection (GC)** performance degradation. Octopus shifts the paradigm by treating data as raw memory.
 
-- **Zero-Copy Concurrency:** Workers read data and write directly to shared memory. No IPC serialization overhead.
-- **O(1) Lock-Free Indexing:** A high-capacity hash table implemented in raw memory allows millions of unique keys to be indexed without thread contention.
-- **Cache-Friendly Columnar Storage:** Data is stored in contiguous `TypedArrays`, maximizing CPU L1/L2 cache hits.
-
----
-
-## 📊 Benchmark: Octopus vs Polars
-
-**Dataset:** 100M Amazon reviews (118GB raw JSON)
-
-| Métrica | Octopus | Polars |
-|---------|---------|--------|
-| **Tiempo total** | **141s** | 197s |
-| **Velocidad** | **1.41M rec/seg** | 0.51M rec/seg |
-| **Memoria pico** | **~1.7GB** | ~8GB+ |
-| **GC Pausas** | **0** | Frecuentes |
-
-🏆 **Octopus es 2.7x más rápido y usa 4.7x menos memoria**
+* **Zero-Copy Architecture:** Data is mapped directly to `SharedArrayBuffer`. No serialization, no IPC overhead, and zero GC pressure.
+* **Vectorized Execution:** High-speed columnar operations optimized for CPU L1/L2 cache hits.
+* **True Multithreading:** Parallel Workers write to shared memory using lock-free `Atomics`, achieving massive throughput on multi-core systems.
 
 ---
 
-## 🛠 Installation
+## Performance Benchmark: Octopus vs. Polars
+
+**Dataset:** 7.8M rows NYC Taxi Trip Data (~1.5GB CSV)  
+**Environment:** Node.js 22.x | 8 Workers | Local Environment
+
+| Metric | Octopus | Polars (Rust) |
+| :--- | :---: | :---: |
+| **Total Execution Time** | **2.79s** | 5.98s |
+| **Ingestion Speed** | **1.16s** | 1.88s |
+| **Processing Throughput** | **~2.8M rows/s** | ~1.6M rows/s |
+| **Peak Memory Usage** | **~1.2GB** | ~2.5GB+ |
+
+> **Note:** Octopus outperforms Polars in local Node.js environments by eliminating the cross-language communication overhead (FFI) and leveraging direct V8 memory mapping.
+
+---
+
+## Installation
 
 ```bash
-npm install octopus
+npm install octopus-analytics

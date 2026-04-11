@@ -1,11 +1,5 @@
 # Archivos grandes de datos
-data/*.ndjson
-data/*.json
-data/*.csv
-data/*.parquet
-
-# Benchmarks locales
-benchmarks/results/*.json
+data/
 
 # Logs
 *.log

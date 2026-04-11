@@ -1,6 +1,6 @@
-import fs from 'fs';
-import readline from 'readline';
-import { DataFrame } from '../core/DataFrame.js';
+import fs from "fs";
+import readline from "readline";
+import { DataFrame } from "../core/DataFrame.js";
 
 /**
  * Lee un archivo TXT delimitado y devuelve un DataFrame
@@ -15,225 +15,237 @@ import { DataFrame } from '../core/DataFrame.js';
  * @returns {Promise<DataFrame>}
  */
 export async function readTXT(filePath, options = {}) {
-  const {
-    delimiter = '\t',
-    header = true,
-    encoding = 'utf8',
-    chunkSize = 10000,
-    fixedWidths = null,
-    columnNames = null
-  } = options;
+	const {
+		delimiter = "\t",
+		header = true,
+		encoding = "utf8",
+		chunkSize = 10000,
+		fixedWidths = null,
+		columnNames = null,
+	} = options;
 
-  const df = new DataFrame();
-  df.filePath = filePath;
-  df.fileType = 'txt';
+	const df = new DataFrame();
+	df.filePath = filePath;
+	df.fileType = "txt";
 
-  const stats = fs.statSync(filePath);
-  const isLargeFile = stats.size > 100 * 1024 * 1024; // > 100MB
+	const stats = fs.statSync(filePath);
+	const isLargeFile = stats.size > 100 * 1024 * 1024; // > 100MB
 
-  if (fixedWidths) {
-    // Archivo de ancho fijo
-    await readFixedWidth(filePath, df, {
-      fixedWidths,
-      columnNames,
-      encoding,
-      chunkSize
-    });
-  } else {
-    // Archivo delimitado (TSV, pipe, etc.)
-    await readDelimited(filePath, df, {
-      delimiter,
-      header,
-      encoding,
-      chunkSize,
-      isLargeFile
-    });
-  }
+	if (fixedWidths) {
+		// Archivo de ancho fijo
+		await readFixedWidth(filePath, df, {
+			fixedWidths,
+			columnNames,
+			encoding,
+			chunkSize,
+		});
+	} else {
+		// Archivo delimitado (TSV, pipe, etc.)
+		await readDelimited(filePath, df, {
+			delimiter,
+			header,
+			encoding,
+			chunkSize,
+			isLargeFile,
+		});
+	}
 
-  console.log(`✅ TXT cargado: ${df.rowCount.toLocaleString()} filas, ${Object.keys(df.columns).length} columnas`);
-  
-  return df;
+	console.log(
+		`✅ TXT cargado: ${df.rowCount.toLocaleString()} filas, ${Object.keys(df.columns).length} columnas`,
+	);
+
+	return df;
 }
 
 /**
  * Lee archivo delimitado (TSV, CSV con otro delimiter, etc.)
  */
 async function readDelimited(filePath, df, options) {
-  const { delimiter, header, encoding, chunkSize, isLargeFile } = options;
-  
-  const stream = fs.createReadStream(filePath, { encoding });
-  const rl = readline.createInterface({
-    input: stream,
-    crlfDelay: Infinity
-  });
+	const { delimiter, header, encoding, chunkSize, isLargeFile } = options;
 
-  let headers = [];
-  let rowCount = 0;
-  let isFirstLine = true;
-  let batch = [];
+	const stream = fs.createReadStream(filePath, { encoding });
+	const rl = readline.createInterface({
+		input: stream,
+		crlfDelay: Infinity,
+	});
 
-  for await (const line of rl) {
-    if (!line.trim()) continue;
+	let headers = [];
+	let rowCount = 0;
+	let isFirstLine = true;
+	let batch = [];
 
-    const values = parseDelimitedLine(line, delimiter);
+	for await (const line of rl) {
+		if (!line.trim()) continue;
 
-    // Primera línea: headers
-    if (isFirstLine && header) {
-      headers = values.map(v => cleanValue(v).replace(/[^a-zA-Z0-9_]/g, '_'));
-      df.columns = {};
-      headers.forEach(col => {
-        df.columns[col] = [];
-      });
-      isFirstLine = false;
-      continue;
-    }
+		const values = parseDelimitedLine(line, delimiter);
 
-    // Sin header: usar índices
-    if (isFirstLine && !header) {
-      headers = values.map((_, i) => `col_${i}`);
-      df.columns = {};
-      headers.forEach(col => {
-        df.columns[col] = [];
-      });
-      isFirstLine = false;
-    }
+		// Primera línea: headers
+		if (isFirstLine && header) {
+			headers = values.map((v) => cleanValue(v).replace(/[^a-zA-Z0-9_]/g, "_"));
+			df.columns = {};
+			headers.forEach((col) => {
+				df.columns[col] = [];
+			});
+			isFirstLine = false;
+			continue;
+		}
 
-    // Procesar fila
-    headers.forEach((header, i) => {
-      let value = values[i] || '';
-      value = cleanValue(value);
-      
-      // Intentar parsear números
-      if (value !== '' && !isNaN(value) && value !== 'null' && value !== 'undefined') {
-        const num = Number(value);
-        if (!isNaN(num) && value.trim() !== '') {
-          value = num;
-        }
-      }
-      
-      df.columns[header].push(value);
-    });
+		// Sin header: usar índices
+		if (isFirstLine && !header) {
+			headers = values.map((_, i) => `col_${i}`);
+			df.columns = {};
+			headers.forEach((col) => {
+				df.columns[col] = [];
+			});
+			isFirstLine = false;
+		}
 
-    rowCount++;
+		// Procesar fila
+		headers.forEach((header, i) => {
+			let value = values[i] || "";
+			value = cleanValue(value);
 
-    // Limpiar batch periódicamente (liberar memoria)
-    if (batch.length >= chunkSize) {
-      batch = [];
-    }
-  }
+			// Intentar parsear números
+			if (
+				value !== "" &&
+				!isNaN(value) &&
+				value !== "null" &&
+				value !== "undefined"
+			) {
+				const num = Number(value);
+				if (!isNaN(num) && value.trim() !== "") {
+					value = num;
+				}
+			}
 
-  df.rowCount = rowCount;
+			df.columns[header].push(value);
+		});
+
+		rowCount++;
+
+		// Limpiar batch periódicamente (liberar memoria)
+		if (batch.length >= chunkSize) {
+			batch = [];
+		}
+	}
+
+	df.rowCount = rowCount;
 }
 
 /**
  * Lee archivo de ancho fijo
  */
 async function readFixedWidth(filePath, df, options) {
-  const { fixedWidths, columnNames, encoding, chunkSize } = options;
-  
-  const stream = fs.createReadStream(filePath, { encoding });
-  const rl = readline.createInterface({
-    input: stream,
-    crlfDelay: Infinity
-  });
+	const { fixedWidths, columnNames, encoding, chunkSize } = options;
 
-  // Determinar headers
-  let headers = columnNames || fixedWidths.map((_, i) => `col_${i}`);
-  
-  df.columns = {};
-  headers.forEach(col => {
-    df.columns[col] = [];
-  });
+	const stream = fs.createReadStream(filePath, { encoding });
+	const rl = readline.createInterface({
+		input: stream,
+		crlfDelay: Infinity,
+	});
 
-  let rowCount = 0;
-  let isFirstLine = true;
-  let skipHeader = columnNames ? false : true;
+	// Determinar headers
+	let headers = columnNames || fixedWidths.map((_, i) => `col_${i}`);
 
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    
-    // Saltar header si no se proporcionaron nombres
-    if (skipHeader && isFirstLine) {
-      isFirstLine = false;
-      continue;
-    }
+	df.columns = {};
+	headers.forEach((col) => {
+		df.columns[col] = [];
+	});
 
-    // Parsear por ancho fijo
-    let start = 0;
-    const values = [];
-    
-    for (const width of fixedWidths) {
-      const value = line.substring(start, start + width).trim();
-      values.push(value);
-      start += width;
-    }
+	let rowCount = 0;
+	let isFirstLine = true;
+	let skipHeader = columnNames ? false : true;
 
-    // Agregar a columnas
-    headers.forEach((header, i) => {
-      let value = values[i] || '';
-      
-      // Intentar parsear números
-      if (value !== '' && !isNaN(value) && value !== 'null' && value !== 'undefined') {
-        const num = Number(value);
-        if (!isNaN(num) && value.trim() !== '') {
-          value = num;
-        }
-      }
-      
-      df.columns[header].push(value);
-    });
+	for await (const line of rl) {
+		if (!line.trim()) continue;
 
-    rowCount++;
-    
-    if (rowCount % chunkSize === 0) {
-      // Dejar respirar al event loop
-      await new Promise(resolve => setImmediate(resolve));
-    }
-  }
+		// Saltar header si no se proporcionaron nombres
+		if (skipHeader && isFirstLine) {
+			isFirstLine = false;
+			continue;
+		}
 
-  df.rowCount = rowCount;
+		// Parsear por ancho fijo
+		let start = 0;
+		const values = [];
+
+		for (const width of fixedWidths) {
+			const value = line.substring(start, start + width).trim();
+			values.push(value);
+			start += width;
+		}
+
+		// Agregar a columnas
+		headers.forEach((header, i) => {
+			let value = values[i] || "";
+
+			// Intentar parsear números
+			if (
+				value !== "" &&
+				!isNaN(value) &&
+				value !== "null" &&
+				value !== "undefined"
+			) {
+				const num = Number(value);
+				if (!isNaN(num) && value.trim() !== "") {
+					value = num;
+				}
+			}
+
+			df.columns[header].push(value);
+		});
+
+		rowCount++;
+
+		if (rowCount % chunkSize === 0) {
+			// Dejar respirar al event loop
+			await new Promise((resolve) => setImmediate(resolve));
+		}
+	}
+
+	df.rowCount = rowCount;
 }
 
 /**
  * Parsea línea delimitada respetando comillas
  */
 function parseDelimitedLine(line, delimiter) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
-  let i = 0;
-  
-  while (i < line.length) {
-    const char = line[i];
-    
-    if (char === '"') {
-      inQuotes = !inQuotes;
-      i++;
-      continue;
-    }
-    
-    if (char === delimiter && !inQuotes) {
-      result.push(current);
-      current = '';
-      i++;
-      continue;
-    }
-    
-    current += char;
-    i++;
-  }
-  
-  result.push(current);
-  return result;
+	const result = [];
+	let current = "";
+	let inQuotes = false;
+	let i = 0;
+
+	while (i < line.length) {
+		const char = line[i];
+
+		if (char === '"') {
+			inQuotes = !inQuotes;
+			i++;
+			continue;
+		}
+
+		if (char === delimiter && !inQuotes) {
+			result.push(current);
+			current = "";
+			i++;
+			continue;
+		}
+
+		current += char;
+		i++;
+	}
+
+	result.push(current);
+	return result;
 }
 
 /**
  * Limpia el valor (remueve espacios y comillas)
  */
 function cleanValue(value) {
-  value = value.trim();
-  if (value.startsWith('"') && value.endsWith('"')) {
-    value = value.slice(1, -1);
-  }
-  return value;
+	value = value.trim();
+	if (value.startsWith('"') && value.endsWith('"')) {
+		value = value.slice(1, -1);
+	}
+	return value;
 }
