@@ -1,122 +1,104 @@
 import { DataFrame } from '../core/DataFrame.js';
-/**
- * StringIndexer - Convierte strings a índices numéricos
- * Similar a sklearn.preprocessing.LabelEncoder
- */
+
 export class StringIndexer {
   constructor(options = {}) {
     this.options = {
-      handleUnknown: 'error', // 'error', 'keep', 'useExisting'
+      handleUnknown: 'error', 
       ...options
     };
-    this.vocabulary = new Map();
-    this.labels = [];
+    this.vocabulary = new Map(); 
+    this.inverseVocabulary = new Map(); 
+    this.stringToHash = new Map(); // Nueva: Para saber que "Movie" -> 74472349
     this.isFitted = false;
   }
 
   /**
-   * Ajusta el indexer con los datos
-   * @param {DataFrame} df - DataFrame con los datos
-   * @param {string|Array} columns - Columna(s) a indexar
+   * Genera el mismo hash que el worker para poder comparar.
    */
+  _hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0; 
+    }
+    return hash;
+  }
+
   fit(df, columns) {
     const cols = Array.isArray(columns) ? columns : [columns];
     
     for (const col of cols) {
       const uniqueValues = new Set();
+      const data = df.columns[col];
+      
       for (let i = 0; i < df.rowCount; i++) {
-        const value = df.columns[col][i];
-        if (value !== null && value !== undefined) {
-          uniqueValues.add(String(value));
+        const value = data[i];
+        if (value !== null && !isNaN(value) && value !== -1) {
+          uniqueValues.add(value);
         }
       }
       
-      const sorted = Array.from(uniqueValues).sort();
+      // Ordenamos los hashes para que el índice sea consistente
+      const sortedHashes = Array.from(uniqueValues).sort((a, b) => a - b);
       const colMap = new Map();
-      sorted.forEach((label, idx) => {
-        colMap.set(label, idx);
+      const invColArray = [];
+
+      sortedHashes.forEach((hash, idx) => {
+        colMap.set(hash, idx);
+        invColArray[idx] = hash; 
       });
       
       this.vocabulary.set(col, colMap);
-      this.labels.push({ col, labels: sorted });
+      this.inverseVocabulary.set(col, invColArray);
     }
     
     this.isFitted = true;
     return this;
   }
 
-  /**
-   * Transforma los datos a índices
-   * @param {DataFrame} df - DataFrame a transformar
-   * @returns {DataFrame} Nuevo DataFrame con columnas indexadas
-   */
   transform(df) {
-    if (!this.isFitted) {
-      throw new Error('StringIndexer must be fitted first');
-    }
-    
+    if (!this.isFitted) throw new Error('StringIndexer must be fitted first');
     const newColumns = { ...df.columns };
     
-    for (const { col } of this.labels) {
-      const colMap = this.vocabulary.get(col);
-      const indexedCol = `${col}_indexed`;
+    for (const [col, colMap] of this.vocabulary.entries()) {
+      const sourceData = df.columns[col];
+      const rowCount = df.rowCount;
+      const indexedData = new Float64Array(new SharedArrayBuffer(rowCount * 8));
       
-      newColumns[indexedCol] = [];
-      for (let i = 0; i < df.rowCount; i++) {
-        const value = df.columns[col][i];
-        if (value === null || value === undefined) {
-          newColumns[indexedCol].push(-1);
-        } else {
-          const strValue = String(value);
-          if (colMap.has(strValue)) {
-            newColumns[indexedCol].push(colMap.get(strValue));
-          } else {
-            if (this.options.handleUnknown === 'error') {
-              throw new Error(`Unknown label: ${strValue}`);
-            } else if (this.options.handleUnknown === 'keep') {
-              newColumns[indexedCol].push(strValue);
-            } else {
-              newColumns[indexedCol].push(-1);
-            }
-          }
-        }
+      for (let i = 0; i < rowCount; i++) {
+        const val = sourceData[i];
+        const index = colMap.get(val);
+        indexedData[i] = index !== undefined ? index : -1;
       }
+      
+      newColumns[`${col}_indexed`] = indexedData;
     }
     
-    return new DataFrame({ 
-      columns: newColumns, 
-      rowCount: df.rowCount 
-    });
+    return new DataFrame({ columns: newColumns, rowCount: df.rowCount });
   }
 
-  /**
-   * Fit + Transform en un solo paso
-   */
   fitTransform(df, columns) {
     return this.fit(df, columns).transform(df);
   }
 
   /**
-   * Convierte índice de vuelta a label original
-   * @param {string} col - Columna original
-   * @param {number} index - Índice a convertir
-   * @returns {string} Label original
+   * IMPORTANTE: Ahora busca el índice basándose en el TEXTO original
+   * traduciéndolo primero a Hash.
    */
-  inverseTransform(col, index) {
+  getIndex(col, label) {
     const colMap = this.vocabulary.get(col);
-    if (!colMap) return null;
-    
-    for (const [label, idx] of colMap.entries()) {
-      if (idx === index) return label;
-    }
-    return null;
+    if (!colMap) return -1;
+    const hash = this._hashString(label);
+    const idx = colMap.get(hash);
+    return idx !== undefined ? idx : -1;
   }
 
   /**
-   * Obtiene el vocabulario completo de una columna
+   * Recupera las etiquetas (labels) de una columna.
+   * Como no tenemos el texto original en el buffer, 
+   * este método ahora es secundario.
    */
   getLabels(col) {
-    const entry = this.labels.find(l => l.col === col);
-    return entry ? entry.labels : [];
+    return this.inverseVocabulary.get(col) || [];
   }
 }

@@ -1,201 +1,105 @@
-import { Octopus, StringIndexer, OneHotEncoder, StandardScaler, Pipeline } from '../src/index.js';
+import { Octopus, StringIndexer, OneHotEncoder, DataFrame } from '../src/index.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { DataFrame } from '../src/core/DataFrame.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataPath = path.join(__dirname, '..', 'data', 'netflix_titles.csv');
 
 async function main() {
-  console.log(' NETFLIX TITLES - TRANSFORMERS DEMO');
-  console.log('=====================================\n');
+  console.log('🐙 NYC NETFLIX TITLES - NITRO TRANSFORMERS');
+  console.log('===========================================\n');
 
-  // 1. Cargar datos
-  console.log(' Cargando Netflix dataset...');
+  // 1. CARGA NITRO
+  console.log('🚀 Cargando dataset con Octopus Nitro...');
   const df = await Octopus.read(dataPath);
-  console.log(`   ✅ Cargado: ${df.rowCount.toLocaleString()} películas/series`);
-  console.log(`    Columnas: ${Object.keys(df.columns).join(', ')}\n`);
+  console.log(`✅ Cargado: ${df.rowCount.toLocaleString()} registros en memoria compartida.\n`);
 
-  // 2. Limpieza básica
-  console.log(' Limpiando datos nulos...');
-  
-  // Rellenar nulos en columnas clave
-  const columnsToClean = ['country', 'director', 'cast', 'rating'];
+  // 2. LIMPIEZA NITRO (Usando IDs numéricos para nulos)
+  console.log('🧹 Limpiando nulos...');
+  const UNKNOWN_HASH = -1; 
+  const columnsToClean = ['country', 'director', 'cast', 'rating', 'type'];
+
   for (const col of columnsToClean) {
+    const colData = df.columns[col];
     let nullCount = 0;
     for (let i = 0; i < df.rowCount; i++) {
-      if (!df.columns[col]?.[i] || df.columns[col][i] === '') {
-        df.columns[col][i] = 'Unknown';
+      // Si el valor es 0, NaN o nulo (depende del hash del worker)
+      if (!colData[i] || isNaN(colData[i])) {
+        colData[i] = UNKNOWN_HASH;
         nullCount++;
       }
     }
-    console.log(`   ${col}: ${nullCount} nulos rellenados con 'Unknown'`);
+    console.log(`   - ${col}: ${nullCount} nulos marcados como Unknown`);
   }
-  
-  // Rellenar rating
-  for (let i = 0; i < df.rowCount; i++) {
-    if (!df.columns.rating[i] || df.columns.rating[i] === '') {
-      df.columns.rating[i] = 'Not Rated';
-    }
-  }
-  
-  console.log('    Limpieza completada\n');
 
-  // 3. StringIndexer - Convertir a índices
-  console.log(' StringIndexer: convirtiendo categorías...');
-  
+  // 3. STRING INDEXER (El Diccionario)
+  console.log('\n🏷️ StringIndexer: Creando mapas de categorías...');
   const indexer = new StringIndexer({ handleUnknown: 'keep' });
-  const dfWithIndexes = indexer.fitTransform(df, ['type', 'rating']);
   
-  console.log('   Columnas indexadas:');
-  console.log(`   - type_indexed: Movie=0, TV Show=1`);
-  console.log(`   - rating_indexed: ${indexer.getLabels('rating').slice(0, 5).join(', ')}... (${indexer.getLabels('rating').length} total)`);
-  
-  // Mostrar muestra
-  console.log('\n   Muestra:');
-  for (let i = 0; i < 5; i++) {
-    console.log(`   ${df.columns.title[i]} | ${df.columns.type[i]} → ${dfWithIndexes.columns.type_indexed[i]} | rating: ${df.columns.rating[i]} → ${dfWithIndexes.columns.rating_indexed[i]}`);
-  }
+  // IMPORTANTE: Indexamos country para poder traducirlo después
+  const dfIndexed = indexer.fitTransform(df, ['type', 'rating', 'country']);
 
-  // 4. OneHotEncoder - Para tipo (Movie/TV Show)
-  console.log('\n OneHotEncoder: creando columnas binarias para "type"...');
+  const typeLabels = indexer.getLabels('type');
+  console.log(`✅ Categorías detectadas en 'type': ${typeLabels.join(', ')}`);
+
+  // 4. ONE-HOT ENCODER
+  console.log('\n🔥 OneHotEncoder: Generando columnas binarias...');
+  const encoder = new OneHotEncoder();
+  const dfEncoded = encoder.fitTransform(dfIndexed, ['type']);
   
-  const encoder = new OneHotEncoder({ dropFirst: false });
-  const dfEncoded = encoder.fitTransform(df, ['type']);
-  
-  console.log('   Columnas creadas:');
   const featureNames = encoder.getFeatureNames();
-  for (const feat of featureNames) {
-    if (dfEncoded.columns[feat]) {
-      const ones = dfEncoded.columns[feat].filter(v => v === 1).length;
-      const percentage = ((ones / df.rowCount) * 100).toFixed(1);
-      console.log(`   - ${feat}: ${ones.toLocaleString()} registros (${percentage}%)`);
-    } else {
-      console.log(`   - ${feat}: [ERROR - columna no encontrada]`);
-    }
-  }
+  featureNames.forEach(feat => {
+    const count = dfEncoded.columns[feat].filter(v => v === 1).length;
+    console.log(`   - ${feat}: ${count} registros`);
+  });
 
-  // 5. Pipeline con StandardScaler (para release_year)
-  console.log('\n Pipeline: escalando release_year...');
-  
-  // Verificar que release_year existe y es numérico
-  let yearScaled = false;
-  if (df.columns.release_year) {
-    // Crear versión escalada manualmente
-    const years = [];
-    for (let i = 0; i < df.rowCount; i++) {
-      const year = df.columns.release_year[i];
-      if (typeof year === 'number' && !isNaN(year)) {
-        years.push(year);
-      }
-    }
-    
-    const minYear = Math.min(...years);
-    const maxYear = Math.max(...years);
-    const range = maxYear - minYear;
-    
-    df.columns.release_year_scaled = [];
-    for (let i = 0; i < df.rowCount; i++) {
-      const year = df.columns.release_year[i];
-      if (typeof year === 'number' && !isNaN(year)) {
-        const scaled = range === 0 ? 0 : (year - minYear) / range;
-        df.columns.release_year_scaled.push(scaled);
-      } else {
-        df.columns.release_year_scaled.push(0);
-      }
-    }
-    
-    console.log(`   release_year: min=${minYear}, max=${maxYear}, range=${range}`);
-    console.log(`   Nueva columna: release_year_scaled (0-1 normalizado)`);
-    yearScaled = true;
-  } else {
-    console.log('   release_year no encontrada, saltando escalado');
-  }
-
-  // 6. Análisis con datos transformados
-  console.log('\n📊 Análisis: Películas por año (normalizado)');
-  
-  const moviesByYear = {};
-  for (let i = 0; i < df.rowCount; i++) {
-    const type = df.columns.type[i];
-    const year = df.columns.release_year[i];
-    
-    if (type === 'Movie' && typeof year === 'number' && year >= 2010) {
-      moviesByYear[year] = (moviesByYear[year] || 0) + 1;
-    }
-  }
-  
-  const sortedYears = Object.entries(moviesByYear)
-    .sort((a, b) => parseInt(b[0]) - parseInt(a[0]))
-    .slice(0, 5);
-  
-  console.log('Top 5 años recientes con más películas:');
-  for (const [year, count] of sortedYears) {
-    console.log(`   ${year}: ${count} películas`);
-  }
-
-  // 7. Distribución de ratings
-  console.log('\nDistribución de ratings:');
-  
-  const ratingCount = {};
-  for (let i = 0; i < df.rowCount; i++) {
-    const rating = df.columns.rating[i];
-    if (rating && rating !== 'Not Rated') {
-      ratingCount[rating] = (ratingCount[rating] || 0) + 1;
-    }
-  }
-  
-  Object.entries(ratingCount)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .forEach(([rating, count]) => {
-      const pct = ((count / df.rowCount) * 100).toFixed(1);
-      console.log(`   ${rating}: ${count.toLocaleString()} (${pct}%)`);
-    });
-
-  // 8. Exportar resultados
-  console.log('\nExportando datos procesados...');
-  
+  // 5. EXPORTACIÓN
+  console.log('\n💾 Exportando resultados...');
   const outputDir = path.join(__dirname, '..', 'data');
   
-  // Crear DataFrame con columnas seleccionadas para exportar
-  const exportColumns = {
-    title: df.columns.title,
-    type: df.columns.type,
-    type_indexed: dfWithIndexes.columns.type_indexed,
-    rating: df.columns.rating,
-    rating_indexed: dfWithIndexes.columns.rating_indexed,
-    release_year: df.columns.release_year
-  };
-  
-  if (yearScaled) {
-    exportColumns.release_year_scaled = df.columns.release_year_scaled;
-  }
-  
-  // Agregar columnas one-hot si existen
-  for (const feat of featureNames) {
-    if (dfEncoded.columns[feat]) {
-      exportColumns[feat] = dfEncoded.columns[feat];
-    }
-  }
-  
-  const exportDf = new DataFrame({ columns: exportColumns, rowCount: df.rowCount });
-  
-  await exportDf.toCSV(path.join(outputDir, 'netflix_processed.csv'));
-  await exportDf.toJSON(path.join(outputDir, 'netflix_processed.json'), { pretty: true });
-  
-  console.log('      Exportado a:');
-  console.log('      - data/netflix_processed.csv');
-  console.log('      - data/netflix_processed.json');
+  // Creamos un subset para exportar
+  const exportDf = new DataFrame({
+    columns: {
+      title: df.columns.title,
+      type: df.columns.type,
+      type_indexed: dfIndexed.columns.type_indexed,
+      country: df.columns.country,
+      rating_indexed: dfIndexed.columns.rating_indexed
+    },
+    rowCount: df.rowCount
+  });
 
-  // 9. Estadísticas finales
-  console.log('\n RESUMEN FINAL:');
-  console.log(`   Total registros: ${df.rowCount.toLocaleString()}`);
-  console.log(`   Tipos: Movie (${ratingCount.Movie || df.columns.type.filter(t => t === 'Movie').length}), TV Show (${df.columns.type.filter(t => t === 'TV Show').length})`);
-  console.log(`   Ratings únicos: ${Object.keys(ratingCount).length}`);
-  console.log(`   Países (primeros 5): ${df.columns.country.slice(0, 5).join(', ')}...`);
-  
-  console.log('\nTransformers demo completado!');
+  await exportDf.toCSV(path.join(outputDir, 'netflix_processed.csv'));
+  await exportDf.toJSON(path.join(outputDir, 'netflix_processed.json'));
+
+  // 9. RESUMEN FINAL (Sincronización de IDs)
+// 9. RESUMEN FINAL corregido
+console.log('\n📊 RESUMEN FINAL:');
+
+// El indexer ahora calcula el hash de "Movie" y te da su ID (0, 1, etc)
+const movieIdx = indexer.getIndex('type', 'Movie');
+const tvShowIdx = indexer.getIndex('type', 'TV Show');
+
+const typeDataIndexed = dfIndexed.columns['type_indexed'];
+let movieCount = 0;
+let tvShowCount = 0;
+
+for (let i = 0; i < df.rowCount; i++) {
+  const val = typeDataIndexed[i];
+  if (val === movieIdx) movieCount++;
+  else if (val === tvShowIdx) tvShowCount++;
 }
 
-main().catch(console.error);
+// Para los ratings reales:
+// En Netflix los ratings son pocos (14). Si te salen 6015, es que 
+// estás indexando una columna que NO es la de ratings (quizás la de IDs).
+const ratingCategoriesCount = indexer.getLabels('rating').length;
+
+console.log(`   Tipos: Movie (${movieCount}), TV Show (${tvShowCount})`);
+console.log(`   Categorías de Rating: ${ratingCategoriesCount}`);
+  console.log('\n🚀 Transformers demo completado con éxito!');
+}
+
+main().catch(err => {
+  console.error('❌ Error en el demo:', err);
+});

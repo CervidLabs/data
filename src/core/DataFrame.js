@@ -182,4 +182,33 @@ export class DataFrame {
     const exporter = new TXTExporter(this, options);
     return await exporter.export(outputPath);
   } 
+/**
+ * Convierte el DataFrame (TypedArrays) a un Array de objetos estándar.
+ * Útil para exportación y compatibilidad con JSON.
+ */
+toArray() {
+  const result = [];
+  const len = this.rowCount;
+  const headers = this.headers;
+  const columns = this.columns;
+
+  for (let i = 0; i < len; i++) {
+    const row = {};
+    for (const h of headers) {
+      row[h] = columns[h][i];
+    }
+    result.push(row);
+  }
+  return result;
+}
+// En DataFrame.js
+getUniqueStrings(colName) {
+    const data = this.columns[colName];
+    const uniqueIds = new Set();
+    for(let i=0; i < this.rowCount; i++) {
+        uniqueIds.add(data[i]);
+    }
+    // Aquí es donde el Pool entraría en juego
+    return uniqueIds; 
+}
 }
