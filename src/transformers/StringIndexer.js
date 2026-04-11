@@ -1,104 +1,70 @@
-import { DataFrame } from '../core/DataFrame.js';
-
 export class StringIndexer {
   constructor(options = {}) {
-    this.options = {
-      handleUnknown: 'error', 
-      ...options
-    };
-    this.vocabulary = new Map(); 
-    this.inverseVocabulary = new Map(); 
-    this.stringToHash = new Map(); // Nueva: Para saber que "Movie" -> 74472349
-    this.isFitted = false;
+    this.options = { handleUnknown: 'keep', ...options };
+    this.maps = {}; 
+    this.labels = {}; 
+    this.decoder = new TextDecoder();
   }
 
-  /**
-   * Genera el mismo hash que el worker para poder comparar.
-   */
-  _hashString(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = (hash << 5) - hash + str.charCodeAt(i);
-      hash |= 0; 
+  fitTransform(df, input) {
+    // Normalizar nombre de columna
+    const colName = Array.isArray(input) ? input[0] : input;
+    
+    const distinctValues = new Set();
+    const map = new Map();
+    const labels = [];
+
+    // 1. Scan de bytes usando los offsets del DF
+    for (let i = 0; i < df.rowCount; i++) {
+      const val = this._extract(df, colName, i);
+      distinctValues.add(val);
     }
-    return hash;
-  }
 
-  fit(df, columns) {
-    const cols = Array.isArray(columns) ? columns : [columns];
-    
-    for (const col of cols) {
-      const uniqueValues = new Set();
-      const data = df.columns[col];
-      
-      for (let i = 0; i < df.rowCount; i++) {
-        const value = data[i];
-        if (value !== null && !isNaN(value) && value !== -1) {
-          uniqueValues.add(value);
-        }
-      }
-      
-      // Ordenamos los hashes para que el índice sea consistente
-      const sortedHashes = Array.from(uniqueValues).sort((a, b) => a - b);
-      const colMap = new Map();
-      const invColArray = [];
+    // 2. Crear Diccionario
+    Array.from(distinctValues).sort().forEach((val, idx) => {
+      map.set(val, idx);
+      labels.push(val);
+    });
 
-      sortedHashes.forEach((hash, idx) => {
-        colMap.set(hash, idx);
-        invColArray[idx] = hash; 
-      });
-      
-      this.vocabulary.set(col, colMap);
-      this.inverseVocabulary.set(col, invColArray);
+    // 3. Guardar bajo el nombre de la columna (Evita el error de undefined)
+    this.maps[colName] = map;
+    this.labels[colName] = labels;
+
+    // 4. Transformar
+    const result = new Float64Array(df.rowCount);
+    for (let i = 0; i < df.rowCount; i++) {
+      const val = this._extract(df, colName, i);
+      result[i] = map.get(val) ?? labels.length;
     }
-    
-    this.isFitted = true;
-    return this;
+    return result;
   }
 
-  transform(df) {
-    if (!this.isFitted) throw new Error('StringIndexer must be fitted first');
-    const newColumns = { ...df.columns };
-    
-    for (const [col, colMap] of this.vocabulary.entries()) {
-      const sourceData = df.columns[col];
-      const rowCount = df.rowCount;
-      const indexedData = new Float64Array(new SharedArrayBuffer(rowCount * 8));
-      
-      for (let i = 0; i < rowCount; i++) {
-        const val = sourceData[i];
-        const index = colMap.get(val);
-        indexedData[i] = index !== undefined ? index : -1;
-      }
-      
-      newColumns[`${col}_indexed`] = indexedData;
+  _extract(df, colName, rowIdx) {
+    const colIdx = df.colMap[colName];
+    const offIdx = (rowIdx * df.numCols + colIdx) * 2;
+    const start = df.offsets[offIdx];
+    const end = df.offsets[offIdx + 1];
+    return this.decoder.decode(df.originalBuffer.subarray(start, end)).trim();
+  }
+
+  getLabels(colName) {
+    const labels = this.labels[colName];
+    if (!labels) throw new Error(`StringIndexer: No hay etiquetas para "${colName}"`);
+    return labels;
+  }
+  // Añade estos métodos a tu clase StringIndexer
+getIndex(colName, label) {
+    // Si solo se pasó un argumento, asumimos que es el label y buscamos en el primer mapa
+    if (label === undefined) {
+        const firstCol = Object.keys(this.maps)[0];
+        return this.maps[firstCol].get(colName) ?? -1;
     }
-    
-    return new DataFrame({ columns: newColumns, rowCount: df.rowCount });
-  }
+    const map = this.maps[colName];
+    return map ? (map.get(label) ?? -1) : -1;
+}
 
-  fitTransform(df, columns) {
-    return this.fit(df, columns).transform(df);
-  }
-
-  /**
-   * IMPORTANTE: Ahora busca el índice basándose en el TEXTO original
-   * traduciéndolo primero a Hash.
-   */
-  getIndex(col, label) {
-    const colMap = this.vocabulary.get(col);
-    if (!colMap) return -1;
-    const hash = this._hashString(label);
-    const idx = colMap.get(hash);
-    return idx !== undefined ? idx : -1;
-  }
-
-  /**
-   * Recupera las etiquetas (labels) de una columna.
-   * Como no tenemos el texto original en el buffer, 
-   * este método ahora es secundario.
-   */
-  getLabels(col) {
-    return this.inverseVocabulary.get(col) || [];
-  }
+getLabels(colName) {
+    const target = colName || Object.keys(this.labels)[0];
+    return this.labels[target] || [];
+}
 }

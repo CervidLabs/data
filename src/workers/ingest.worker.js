@@ -1,100 +1,118 @@
 import { parentPort, workerData } from 'worker_threads';
 
-const { sharedBuffer, colBuffers, start, end, startRow } = workerData;
-const data = new Uint8Array(sharedBuffer);
-const columns = colBuffers.map(buffer => new Float64Array(buffer));
+const { 
+    sharedBuffer, 
+    offsetBuffer, 
+    colBuffers, 
+    start, 
+    end, 
+    startRow,
+    headers 
+} = workerData;
 
-// Mapa local para evitar colisiones de strings en el mismo hilo
-const localStringMap = new Map();
+const view = new Uint8Array(sharedBuffer);
+const offsetView = offsetBuffer ? new Int32Array(offsetBuffer) : null;
+const columns = colBuffers.map(b => b ? new Float64Array(b) : null);
+const totalCols = headers.length;
 
-/**
- * Fast Parse optimizado: 
- * Intenta convertir a número, si no puede, devuelve NaN para activar el String Mapping.
- */
-function fastParse(buf, s, e) {
-    let num = 0, sign = 1, i = s;
-    if (buf[i] === 45) { sign = -1; i++; }
-    
-    // Si el primer carácter no es un número o punto, es un String
-    const first = buf[i];
-    if (!(first >= 48 && first <= 57) && first !== 46) return NaN;
-
-    while (i < e && buf[i] !== 46) {
-        const digit = buf[i] - 48;
-        if (digit >= 0 && digit <= 9) num = num * 10 + digit;
-        else return NaN; // Carácter no numérico en medio de la cadena
-        i++;
-    }
-    if (i < e && buf[i] === 46) {
-        i++;
-        let frac = 0.1;
-        while (i < e) {
-            const digit = buf[i] - 48;
-            if (digit >= 0 && digit <= 9) {
-                num += digit * frac;
-                frac /= 10;
-            } else return NaN;
-            i++;
+function fastParseFloat(buffer, start, end) {
+    if (start >= end) return 0;
+    let val = 0, divisor = 1, dotSeen = false, i = start, sign = 1;
+    if (buffer[i] === 45) { sign = -1; i++; }
+    for (; i < end; i++) {
+        const b = buffer[i];
+        if (b === 46) { dotSeen = true; continue; }
+        if (b >= 48 && b <= 57) {
+            val = val * 10 + (b - 48);
+            if (dotSeen) divisor *= 10;
         }
     }
-    return num * sign;
-}
-
-/**
- * Genera un ID numérico a partir de un String mediante hashing rápido.
- * Esto permite guardar texto en un Float64Array sin perder el orden.
- */
-function stringToId(buf, s, e) {
-    let hash = 0;
-    for (let i = s; i < e; i++) {
-        hash = (hash << 5) - hash + buf[i];
-        hash |= 0; // Convertir a 32bit signed int
-    }
-    return hash;
+    return (val / divisor) * sign;
 }
 
 function process() {
-    let cursor = start;
+    let pos = start;
+    let rowIdx = startRow;
+    let inQuotes = false;
+
+    // 1. Sincronización inicial
     if (start === 0) {
-        while (cursor < end && data[cursor] !== 10) cursor++;
-        cursor++; 
+        while (pos < end && view[pos] !== 10) pos++;
+        pos++;
     }
 
-    let row = startRow;
-    let col = 0;
-    let fieldStart = cursor;
-    const stringsFound = []; // Para reportar al Pool principal si fuera necesario
+    while (pos < end) {
+        let col = 0;
+        let fieldStart = pos;
+        let rowFinished = false;
 
-    for (let i = cursor; i < end; i++) {
-        const byte = data[i];
+        while (pos < end) {
+            const byte = view[pos];
 
-        if (byte === 44 || byte === 10) { // Coma o Salto de línea
-            if (i > fieldStart && columns[col]) {
-                const val = fastParse(data, fieldStart, i);
-                
-                if (!isNaN(val)) {
-                    columns[col][row] = val;
+            // Manejo de comillas dobles (byte 34)
+            if (byte === 34) {
+                // Verificación de comillas escapadas "" (estándar CSV)
+                if (inQuotes && view[pos + 1] === 34) {
+                    pos++; // Saltamos la secuencia escapada
                 } else {
-                    // Es un STRING: Guardamos el HASH como ID
-                    const id = stringToId(data, fieldStart, i);
-                    columns[col][row] = id;
-                    
-                    // Opcional: Podríamos enviar el texto original de vuelta para el Pool
-                    // const text = Buffer.from(data.subarray(fieldStart, i)).toString();
+                    inQuotes = !inQuotes;
                 }
             }
-            
-            fieldStart = i + 1;
-            col++;
 
-            if (byte === 10) {
-                col = 0;
-                row++;
+            // Detectar delimitadores solo si no estamos dentro de una celda protegida
+            if (!inQuotes) {
+                if (byte === 44 || byte === 10) { // Coma o Salto de línea
+                    if (col < totalCols) {
+                        // Guardar valor numérico
+                        if (columns[col]) {
+                            columns[col][rowIdx] = fastParseFloat(view, fieldStart, pos);
+                        }
+
+                        // Guardar Offsets (Strings)
+                        if (offsetView) {
+                            const offsetPos = (rowIdx * totalCols + col) * 2;
+                            let s = fieldStart;
+                            let e = pos;
+
+                            // Limpiar comillas de los bordes
+                            if (view[s] === 34) s++;
+                            if (view[e - 1] === 34) e--;
+                            // Limpiar posible \r (byte 13) de Windows
+                            if (view[e - 1] === 13) e--;
+
+                            offsetView[offsetPos] = s;
+                            offsetView[offsetPos + 1] = Math.max(s, e);
+                        }
+                    }
+
+                    if (byte === 10) { // Fin de fila
+                        pos++;
+                        rowFinished = true;
+                        break;
+                    }
+
+                    col++;
+                    pos++;
+                    fieldStart = pos;
+                    continue;
+                }
             }
+            pos++;
+        }
+
+        // Manejo de la última línea si el archivo no termina en \n
+        if (!rowFinished && pos >= end && col > 0) {
+            rowFinished = true;
+        }
+
+        if (rowFinished) {
+            rowIdx++;
+            col = 0;
+            // IMPORTANTE: Resetear inQuotes por si una fila quedó mal cerrada
+            inQuotes = false; 
         }
     }
-    
-    parentPort.postMessage({ type: 'done' });
+    parentPort.postMessage({ type: 'done', rowCount: rowIdx - startRow });
 }
 
 process();
