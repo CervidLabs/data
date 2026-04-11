@@ -1,0 +1,18 @@
+# Archivos grandes de datos
+data/*.ndjson
+data/*.json
+data/*.csv
+!data/netflix_titles.csv
+data/*.parquet
+
+# Benchmarks locales
+benchmarks/results/*.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+node_modules/

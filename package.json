@@ -1,0 +1,45 @@
+{
+  "name": "octopus",
+  "version": "1.0.0",
+  "description": "High-performance parallel data engine for Node.js using SharedArrayBuffers and lock-free atomic synchronization.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "node test/compare.js"
+  },
+  "keywords": [
+    "dataframe",
+    "parallel",
+    "sharedarraybuffer",
+    "big-data",
+    "data-analysis",
+    "typescript",
+    "columnar-storage",
+    "multithreading",
+    "performance"
+  ],
+  "author": "Aldair Beltran",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0"
+  }
+}
