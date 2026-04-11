@@ -217,44 +217,42 @@ export class DataFrame {
      * @param {string} groupCol - Columna para agrupar (ej: 'category')
      * @param {Object} aggs - Agregaciones (ej: { year: 'count', price: 'mean' })
      */
-    groupBy(groupCol, aggs = {}) {
+groupBy(groupCol, aggs = {}) {
         const groups = new Map();
         const targetData = this.columns[groupCol];
 
-        // 1. Fase de Hash: Agrupar índices por valor único
+        // 1. Hash Phase (Igual que antes)
         for (let i = 0; i < this.rowCount; i++) {
             const val = targetData[i];
-            if (!groups.has(val)) {
-                groups.set(val, []);
-            }
+            if (!groups.has(val)) groups.set(val, []);
             groups.get(val).push(i);
         }
 
-        // 2. Fase de Agregación
+        // 2. Aggregation Phase (Soporta Arrays)
         const resultRows = [];
         for (const [groupVal, indices] of groups.entries()) {
             const row = { [groupCol]: groupVal };
 
-            for (const [colName, op] of Object.entries(aggs)) {
+            for (const [colName, ops] of Object.entries(aggs)) {
                 const colToAgg = this.columns[colName];
-                const values = indices.map(idx => colToAgg[idx]);
+                const values = indices.map(idx => parseFloat(colToAgg[idx])).filter(v => !isNaN(v));
+                
+                // Convertimos a array si el usuario pasó un string solo: 'sum' -> ['sum']
+                const operations = Array.isArray(ops) ? ops : [ops];
 
-                if (op === 'sum') {
-                    row[colName] = values.reduce((a, b) => a + b, 0);
-                } else if (op === 'mean') {
-                    row[colName] = values.reduce((a, b) => a + b, 0) / values.length;
-                } else if (op === 'count') {
-                    row[colName] = values.length;
-                } else if (op === 'max') {
-                    row[colName] = Math.max(...values);
-                } else if (op === 'min') {
-                    row[colName] = Math.min(...values);
-                }
+                operations.forEach(op => {
+                    const outName = operations.length > 1 ? `${colName}_${op}` : colName;
+                    
+                    if (op === 'sum') row[outName] = values.reduce((a, b) => a + b, 0);
+                    else if (op === 'mean') row[outName] = values.reduce((a, b) => a + b, 0) / values.length;
+                    else if (op === 'count') row[outName] = values.length;
+                    else if (op === 'max') row[outName] = Math.max(...values);
+                    else if (op === 'min') row[outName] = Math.min(...values);
+                });
             }
             resultRows.push(row);
         }
 
-        // Retornar un nuevo DataFrame con los resultados agregados
         return DataFrame.fromObjects(resultRows);
     }
 	/**

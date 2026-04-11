@@ -15,3 +15,10 @@ ds.head(3).show();
 
 console.log("--- Last 3 rows ---");
 ds.tail(3).show();
+
+const stats = ds.groupBy('nobel_prize', {
+    award_year: ['min', 'max'], // Queremos el rango de años
+    id: 'count'                 // Y el total de ganadores
+});
+
+stats.show();
