@@ -89,7 +89,7 @@ export class ParallelExecutor {
 			};
 		});
 
-		const workerPath = path.resolve(__dirname, "ingest.worker.js");
+		const workerPath = path.join(__dirname, "ingest.worker.js");
 		let currentStartRow = 0;
 		const workers = [];
 

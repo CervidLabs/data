@@ -2,6 +2,10 @@ import fs from "fs";
 import { Worker } from "worker_threads";
 import os from "os";
 import { DataFrame } from "./DataFrame.js";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export class Octopus {
 	/**
@@ -58,7 +62,9 @@ export class Octopus {
 
 			promises.push(
 				new Promise((resolve) => {
-					const worker = new Worker("./src/workers/ingest.worker.js", {
+					const workerPath = path.join(__dirname,`..`, 'workers', "ingest.worker.js");
+					
+					const worker = new Worker(workerPath, {
 						workerData: {
 							sharedBuffer,
 							offsetBuffer,
