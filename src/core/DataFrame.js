@@ -3,6 +3,7 @@ import path from "path";
 import { CSVExporter } from "../exporters/csv.js";
 import { JSONExporter } from "../exporters/json.js";
 import { TXTExporter } from "../exporters/txt.js";
+import { Column } from "./Column.js";
 
 export class DataFrame {
 	constructor(config = {}) {
@@ -23,37 +24,37 @@ export class DataFrame {
 		this.colMap = data.colMap || null;
 		this.metadata = data.metadata || { indexers: {} };
 	}
-/**
-     * MÉTODO ESTÁTICO: Convierte un array de objetos [{}, {}] 
-     * a una instancia de DataFrame.
-     */
-    static fromObjects(data) {
-        if (!data || data.length === 0) {
-            return new DataFrame({ columns: {}, rowCount: 0, headers: [] });
-        }
+	/**
+	 * MÉTODO ESTÁTICO: Convierte un array de objetos [{}, {}]
+	 * a una instancia de DataFrame.
+	 */
+	static fromObjects(data) {
+		if (!data || data.length === 0) {
+			return new DataFrame({ columns: {}, rowCount: 0, headers: [] });
+		}
 
-        const headers = Object.keys(data[0]);
-        const columns = {};
-        const rowCount = data.length;
+		const headers = Object.keys(data[0]);
+		const columns = {};
+		const rowCount = data.length;
 
-        headers.forEach(h => {
-            const sample = data[0][h];
-            
-            // Nitro Tip: Si es número, usamos Float64Array para mantener la velocidad
-            if (typeof sample === 'number') {
-                const col = new Float64Array(rowCount);
-                for (let i = 0; i < rowCount; i++) {
-                    col[i] = data[i][h] || 0;
-                }
-                columns[h] = col;
-            } else {
-                // Si es texto, usamos Array estándar
-                columns[h] = data.map(row => row[h]);
-            }
-        });
+		headers.forEach((h) => {
+			const sample = data[0][h];
 
-        return new DataFrame({ columns, rowCount, headers });
-    }
+			// Nitro Tip: Si es número, usamos Float64Array para mantener la velocidad
+			if (typeof sample === "number") {
+				const col = new Float64Array(rowCount);
+				for (let i = 0; i < rowCount; i++) {
+					col[i] = data[i][h] || 0;
+				}
+				columns[h] = col;
+			} else {
+				// Si es texto, usamos Array estándar
+				columns[h] = data.map((row) => row[h]);
+			}
+		});
+
+		return new DataFrame({ columns, rowCount, headers });
+	}
 	// 🏷️ WITH_LABEL: Sincroniza el Indexer con los bytes originales
 	with_label(specs) {
 		const newColumns = { ...this.columns };
@@ -81,37 +82,36 @@ export class DataFrame {
 	}
 
 	// 🔧 WITH_COLUMNS: Feature Engineering de alta velocidad
-	// Dentro de with_columns en DataFrame.js
-	with_columns(specs) {
-		const newColumns = { ...this.columns };
-		const newHeaders = [...this.headers];
+with_columns(specs) {
+    const rowCount = this.rowCount;
+    for (const spec of specs) {
+        const newCol = new Float64Array(rowCount);
+        const formula = spec.formula;
+        const inputs = spec.inputs.map(name => this.columns[name]);
+        const numInputs = inputs.length;
 
-		for (const spec of specs) {
-			const { name, inputs, formula } = spec;
-
-			// Ejecutamos la primera fila para detectar el tipo de dato
-			const inputVals = inputs.map((h) => this.columns[h][0]);
-			const sampleOutput = formula(...inputVals);
-
-			let colData;
-			if (typeof sampleOutput === "number") {
-				colData = new Float64Array(this.rowCount);
-			} else {
-				colData = new Array(this.rowCount); // Para texto
-			}
-
-			// Llenar la columna
-			for (let i = 0; i < this.rowCount; i++) {
-				const rowInputs = inputs.map((h) => this.columns[h][i]);
-				colData[i] = formula(...rowInputs);
-			}
-
-			newColumns[name] = colData;
-			if (!newHeaders.includes(name)) newHeaders.push(name);
-		}
-
-		return new DataFrame({ ...this, columns: newColumns, headers: newHeaders });
-	}
+        // ACCESO DIRECTO: Evitamos crear arrays o usar 'map' dentro del bucle
+        if (numInputs === 1) {
+            const col0 = inputs[0];
+            for (let i = 0; i < rowCount; i++) newCol[i] = formula(col0[i]);
+        } else if (numInputs === 2) {
+            const col0 = inputs[0], col1 = inputs[1];
+            for (let i = 0; i < rowCount; i++) newCol[i] = formula(col0[i], col1[i]);
+        } else if (numInputs === 4) {
+            const col0 = inputs[0], col1 = inputs[1], col2 = inputs[2], col3 = inputs[3];
+            for (let i = 0; i < rowCount; i++) newCol[i] = formula(col0[i], col1[i], col2[i], col3[i]);
+        } else {
+            // Caso general (fallback)
+            for (let i = 0; i < rowCount; i++) {
+                const args = new Array(numInputs);
+                for(let j=0; j < numInputs; j++) args[j] = inputs[j][i];
+                newCol[i] = formula(...args);
+            }
+        }
+        this.columns[spec.name] = newCol;
+    }
+    return this;
+}
 	show(n = 5) {
 		const limit = Math.min(n, this.rowCount);
 		const tableData = [];
@@ -120,9 +120,10 @@ export class DataFrame {
 			const row = {};
 			for (const header of this.headers) {
 				let val = this.columns[header][i];
-				// Truncar motivaciones largas para que la tabla no se rompa
-				if (typeof val === "string" && val.length > 30) {
-					val = val.substring(0, 27) + "...";
+
+				// Truncamiento inteligente para que la tabla no se rompa
+				if (typeof val === "string" && val.length > 20) {
+					val = val.substring(0, 17) + "...";
 				}
 				row[header] = val;
 			}
@@ -212,49 +213,52 @@ export class DataFrame {
 			rowCount: indices.length,
 		});
 	}
-/**
-     * GROUP BY: Agrupa por una columna y aplica agregaciones.
-     * @param {string} groupCol - Columna para agrupar (ej: 'category')
-     * @param {Object} aggs - Agregaciones (ej: { year: 'count', price: 'mean' })
-     */
-groupBy(groupCol, aggs = {}) {
-        const groups = new Map();
-        const targetData = this.columns[groupCol];
+	/**
+	 * GROUP BY: Agrupa por una columna y aplica agregaciones.
+	 * @param {string} groupCol - Columna para agrupar (ej: 'category')
+	 * @param {Object} aggs - Agregaciones (ej: { year: 'count', price: 'mean' })
+	 */
+	groupBy(groupCol, aggs = {}) {
+		const groups = new Map();
+		const targetData = this.columns[groupCol];
 
-        // 1. Hash Phase (Igual que antes)
-        for (let i = 0; i < this.rowCount; i++) {
-            const val = targetData[i];
-            if (!groups.has(val)) groups.set(val, []);
-            groups.get(val).push(i);
-        }
+		// 1. Hash Phase (Igual que antes)
+		for (let i = 0; i < this.rowCount; i++) {
+			const val = targetData[i];
+			if (!groups.has(val)) groups.set(val, []);
+			groups.get(val).push(i);
+		}
 
-        // 2. Aggregation Phase (Soporta Arrays)
-        const resultRows = [];
-        for (const [groupVal, indices] of groups.entries()) {
-            const row = { [groupCol]: groupVal };
+		// 2. Aggregation Phase (Soporta Arrays)
+		const resultRows = [];
+		for (const [groupVal, indices] of groups.entries()) {
+			const row = { [groupCol]: groupVal };
 
-            for (const [colName, ops] of Object.entries(aggs)) {
-                const colToAgg = this.columns[colName];
-                const values = indices.map(idx => parseFloat(colToAgg[idx])).filter(v => !isNaN(v));
-                
-                // Convertimos a array si el usuario pasó un string solo: 'sum' -> ['sum']
-                const operations = Array.isArray(ops) ? ops : [ops];
+			for (const [colName, ops] of Object.entries(aggs)) {
+				const colToAgg = this.columns[colName];
+				const values = indices
+					.map((idx) => parseFloat(colToAgg[idx]))
+					.filter((v) => !isNaN(v));
 
-                operations.forEach(op => {
-                    const outName = operations.length > 1 ? `${colName}_${op}` : colName;
-                    
-                    if (op === 'sum') row[outName] = values.reduce((a, b) => a + b, 0);
-                    else if (op === 'mean') row[outName] = values.reduce((a, b) => a + b, 0) / values.length;
-                    else if (op === 'count') row[outName] = values.length;
-                    else if (op === 'max') row[outName] = Math.max(...values);
-                    else if (op === 'min') row[outName] = Math.min(...values);
-                });
-            }
-            resultRows.push(row);
-        }
+				// Convertimos a array si el usuario pasó un string solo: 'sum' -> ['sum']
+				const operations = Array.isArray(ops) ? ops : [ops];
 
-        return DataFrame.fromObjects(resultRows);
-    }
+				operations.forEach((op) => {
+					const outName = operations.length > 1 ? `${colName}_${op}` : colName;
+
+					if (op === "sum") row[outName] = values.reduce((a, b) => a + b, 0);
+					else if (op === "mean")
+						row[outName] = values.reduce((a, b) => a + b, 0) / values.length;
+					else if (op === "count") row[outName] = values.length;
+					else if (op === "max") row[outName] = Math.max(...values);
+					else if (op === "min") row[outName] = Math.min(...values);
+				});
+			}
+			resultRows.push(row);
+		}
+
+		return DataFrame.fromObjects(resultRows);
+	}
 	/**
 	 * ORDENAMIENTO: Ordena el DataFrame basado en una columna.
 	 */
@@ -354,7 +358,17 @@ groupBy(groupCol, aggs = {}) {
 		});
 		return this;
 	}
-
+	/**
+	 * Método privado para obtener una fila como objeto.
+	 * Útil para toArray, toJSON y exportadores.
+	 */
+	_getRow(index) {
+		const row = {};
+		for (const h of this.headers) {
+			row[h] = this.columns[h][index];
+		}
+		return row;
+	}
 	toArray() {
 		const result = [];
 		for (let i = 0; i < this.rowCount; i++) {
@@ -362,105 +376,346 @@ groupBy(groupCol, aggs = {}) {
 		}
 		return result;
 	}
+_validatePath(outputPath, requiredExt) {
+    const ext = path.extname(outputPath).toLowerCase();
+    if (!ext) return outputPath + requiredExt;
+    if (ext !== requiredExt) {
+        throw new Error(`Invalid extension: Output must be ${requiredExt} (received: ${ext})`);
+    }
+    return outputPath;
+}
 
-	async toCSV(outputPath, options = {}) {
-		const exporter = new CSVExporter(this, options);
-		return await exporter.export(outputPath);
+async toCSV(outputPath, options = {}) {
+    const validatedPath = this._validatePath(outputPath, '.csv');
+    const exporter = new CSVExporter(this, options);
+    return await exporter.export(validatedPath);
+}
+
+async toJSON(outputPath, options = {}) {
+    const validatedPath = this._validatePath(outputPath, '.json');
+    const exporter = new JSONExporter(this, options);
+    return await exporter.export(validatedPath);
+}
+
+async toTXT(outputPath, options = {}) {
+    const validatedPath = this._validatePath(outputPath, '.txt');
+    const exporter = new TXTExporter(this, options);
+    return await exporter.export(validatedPath);
+}
+	/**
+	 * DESCRIBE: Genera estadísticas descriptivas de las columnas numéricas.
+	 */
+	describe() {
+		const stats = [];
+		for (const h of this.headers) {
+			const col = this.columns[h];
+
+			// 1. Convertir a números y filtrar lo que no sea numérico
+			const numericValues = Array.from(col)
+				.map((v) => parseFloat(v))
+				.filter((v) => !isNaN(v));
+
+			// 2. Si no hay números en esta columna, saltar a la siguiente
+			if (numericValues.length === 0) continue;
+
+			const sorted = [...numericValues].sort((a, b) => a - b);
+			const count = numericValues.length;
+			const sum = numericValues.reduce((a, b) => a + b, 0);
+			const mean = sum / count;
+
+			stats.push({
+				column: h,
+				count: count,
+				mean: mean.toFixed(2),
+				min: sorted[0],
+				"25%": sorted[Math.floor(count * 0.25)],
+				"50%": sorted[Math.floor(count * 0.5)],
+				"75%": sorted[Math.floor(count * 0.75)],
+				max: sorted[count - 1],
+			});
+		}
+
+		if (stats.length === 0) {
+			console.log("No numeric columns found to describe.");
+		} else {
+			console.table(stats);
+		}
 	}
 
-	async toJSON(outputPath, options = {}) {
-		const exporter = new JSONExporter(this, options);
-		return await exporter.export(outputPath);
+	/**
+	 * RENAME: Cambia los nombres de las columnas sin tocar los datos.
+	 */
+	rename(mapping) {
+		const newColumns = {};
+		const newHeaders = this.headers.map((h) => {
+			const newName = mapping[h] || h;
+			newColumns[newName] = this.columns[h];
+			return newName;
+		});
+
+		return new DataFrame({
+			...this,
+			columns: newColumns,
+			headers: newHeaders,
+			colMap: Object.fromEntries(newHeaders.map((h, i) => [h, i])),
+		});
 	}
 
-	async toTXT(outputPath, options = {}) {
-		const exporter = new TXTExporter(this, options);
-		return await exporter.export(outputPath);
+	/**
+	 * HEAD: Retorna un nuevo DataFrame con las primeras N filas.
+	 */
+	head(n = 5) {
+		const limit = Math.min(n, this.rowCount);
+		const newColumns = {};
+
+		for (const h of this.headers) {
+			newColumns[h] = this.columns[h].slice(0, limit);
+		}
+
+		return new DataFrame({ ...this, columns: newColumns, rowCount: limit });
 	}
-/**
-     * DESCRIBE: Genera estadísticas descriptivas de las columnas numéricas.
-     */
-describe() {
-        const stats = [];
-        for (const h of this.headers) {
-            const col = this.columns[h];
-            
-            // 1. Convertir a números y filtrar lo que no sea numérico
-            const numericValues = Array.from(col)
-                .map(v => parseFloat(v))
-                .filter(v => !isNaN(v));
 
-            // 2. Si no hay números en esta columna, saltar a la siguiente
-            if (numericValues.length === 0) continue;
+	/**
+	 * TAIL: Retorna un nuevo DataFrame con las últimas N filas.
+	 */
+	tail(n = 5) {
+		const start = Math.max(0, this.rowCount - n);
+		const newColumns = {};
 
-            const sorted = [...numericValues].sort((a, b) => a - b);
-            const count = numericValues.length;
-            const sum = numericValues.reduce((a, b) => a + b, 0);
-            const mean = sum / count;
-            
-            stats.push({
-                column: h,
-                count: count,
-                mean: mean.toFixed(2),
-                min: sorted[0],
-                "25%": sorted[Math.floor(count * 0.25)],
-                "50%": sorted[Math.floor(count * 0.5)],
-                "75%": sorted[Math.floor(count * 0.75)],
-                max: sorted[count - 1]
-            });
-        }
+		for (const h of this.headers) {
+			newColumns[h] = this.columns[h].slice(start, this.rowCount);
+		}
 
-        if (stats.length === 0) {
-            console.log("No numeric columns found to describe.");
-        } else {
-            console.table(stats);
-        }
-    }
+		return new DataFrame({
+			...this,
+			columns: newColumns,
+			rowCount: this.rowCount - start,
+		});
+	}
+	/**
+	 * UNIQUE: Retorna los valores únicos de una columna.
+	 */
+	unique(columnName) {
+		return [...new Set(this.columns[columnName])];
+	}
 
-    /**
-     * RENAME: Cambia los nombres de las columnas sin tocar los datos.
-     */
-    rename(mapping) {
-        const newColumns = {};
-        const newHeaders = this.headers.map(h => {
-            const newName = mapping[h] || h;
-            newColumns[newName] = this.columns[h];
-            return newName;
-        });
+	/**
+	 * NUNIQUE: Conteo rápido de valores únicos.
+	 */
+	nunique(columnName) {
+		return new Set(this.columns[columnName]).size;
+	}
 
-        return new DataFrame({
-            ...this,
-            columns: newColumns,
-            headers: newHeaders,
-            colMap: Object.fromEntries(newHeaders.map((h, i) => [h, i]))
-        });
-    }
+	/**
+	 * VALUE_COUNTS: Frecuencia de valores ordenada de mayor a menor.
+	 */
+	value_counts(columnName) {
+		const counts = {};
+		const col = this.columns[columnName];
 
-    /**
-     * HEAD: Retorna un nuevo DataFrame con las primeras N filas.
-     */
-    head(n = 5) {
-        const limit = Math.min(n, this.rowCount);
-        const newColumns = {};
-        
-        for (const h of this.headers) {
-            newColumns[h] = this.columns[h].slice(0, limit);
-        }
+		for (let i = 0; i < this.rowCount; i++) {
+			const val = col[i];
+			counts[val] = (counts[val] || 0) + 1;
+		}
 
-        return new DataFrame({ ...this, columns: newColumns, rowCount: limit });
-    }
+		return Object.entries(counts)
+			.sort((a, b) => b[1] - a[1])
+			.map(([value, count]) => ({ value, count }));
+	}
 
-    /**
-     * TAIL: Retorna un nuevo DataFrame con las últimas N filas.
-     */
-    tail(n = 5) {
-        const start = Math.max(0, this.rowCount - n);
-        const newColumns = {};
-        
-        for (const h of this.headers) {
-            newColumns[h] = this.columns[h].slice(start, this.rowCount);
-        }
+	/**
+	 * DROPNA: Elimina filas que contengan null, undefined o NaN.
+	 */
+	dropNA() {
+		const indices = [];
+		for (let i = 0; i < this.rowCount; i++) {
+			let hasNull = false;
+			for (const h of this.headers) {
+				const val = this.columns[h][i];
+				if (
+					val === null ||
+					val === undefined ||
+					(typeof val === "number" && isNaN(val))
+				) {
+					hasNull = true;
+					break;
+				}
+			}
+			if (!hasNull) indices.push(i);
+		}
 
-        return new DataFrame({ ...this, columns: newColumns, rowCount: this.rowCount - start });
-    }
+		// Reutilizamos la lógica de reconstrucción de columnas (puedes extraerla a un método privado)
+		return this._rebuildFromIndices(indices);
+	}
+
+	/**
+	 * FILLNA: Remplaza valores nulos por uno específico.
+	 */
+	fillna(value) {
+		for (const h of this.headers) {
+			const col = this.columns[h];
+			for (let i = 0; i < this.rowCount; i++) {
+				if (
+					col[i] === null ||
+					col[i] === undefined ||
+					(typeof col[i] === "number" && isNaN(col[i]))
+				) {
+					col[i] = value;
+				}
+			}
+		}
+		return this; // Modifica in-place para ahorrar memoria en limpieza
+	}
+
+	/**
+	 * Método auxiliar para reconstruir el DF basado en un mapa de índices
+	 */
+	_rebuildFromIndices(indices) {
+		const newColumns = {};
+		for (const h of this.headers) {
+			const oldCol = this.columns[h];
+			const isTyped = oldCol instanceof Float64Array;
+			const newCol = isTyped
+				? new Float64Array(indices.length)
+				: new Array(indices.length);
+
+			for (let j = 0; j < indices.length; j++) {
+				newCol[j] = oldCol[indices[j]];
+			}
+			newColumns[h] = newCol;
+		}
+		return new DataFrame({
+			...this,
+			columns: newColumns,
+			rowCount: indices.length,
+		});
+	}
+	/**
+	 * SELECT: Filtra columnas para liberar RAM.
+	 * Vital para archivos gigantes (118GB).
+	 */
+	select(columnNames) {
+		const newColumns = {};
+		for (const name of columnNames) {
+			if (this.columns[name]) {
+				newColumns[name] = this.columns[name];
+			}
+		}
+		return new DataFrame({
+			...this,
+			columns: newColumns,
+			headers: columnNames,
+			rowCount: this.rowCount,
+		});
+	}
+
+	/**
+	 * STR_CONTAINS: Retorna un nuevo DF con filas que contienen el patrón.
+	 */
+	str_contains(columnName, pattern) {
+		const regex = new RegExp(pattern, "i");
+		const indices = [];
+		const col = this.columns[columnName];
+
+		for (let i = 0; i < this.rowCount; i++) {
+			if (col[i] && regex.test(col[i])) {
+				indices.push(i);
+			}
+		}
+		return this._rebuildFromIndices(indices);
+	}
+
+	/**
+	 * CAST: Fuerza el cambio de tipo de una columna.
+	 */
+	cast(columnName, type) {
+		const oldCol = this.columns[columnName];
+		let newCol;
+
+		if (type === "float" || type === "int") {
+			newCol = new Float64Array(this.rowCount);
+			for (let i = 0; i < this.rowCount; i++) {
+				newCol[i] = parseFloat(oldCol[i]) || 0;
+			}
+		} else if (type === "string") {
+			newCol = new Array(this.rowCount);
+			for (let i = 0; i < this.rowCount; i++) {
+				newCol[i] = String(oldCol[i]);
+			}
+		}
+
+		this.columns[columnName] = newCol;
+		return this;
+	}
+
+	/**
+	 * CUMSUM: Suma acumulada de una columna.
+	 */
+	cumsum(columnName) {
+		const col = this.columns[columnName];
+		const newCol = new Float64Array(this.rowCount);
+		let acc = 0;
+
+		for (let i = 0; i < this.rowCount; i++) {
+			acc += parseFloat(col[i]) || 0;
+			newCol[i] = acc;
+		}
+
+		const newName = `${columnName}_cumsum`;
+		this.columns[newName] = newCol;
+		if (!this.headers.includes(newName)) this.headers.push(newName);
+
+		return this;
+	}
+	/**
+	 * JOIN: Une dos DataFrames por una columna común.
+	 * @param {DataFrame} other - El otro DataFrame.
+	 * @param {string} on - La columna llave.
+	 * @param {string} how - 'inner' (solo coincidencias) o 'left' (todo el de la izquierda).
+	 */
+	join(other, on, how = "inner") {
+		const leftCol = this.columns[on];
+		const rightCol = other.columns[on];
+
+		// 1. Fase de Hash: Mapeamos los índices del DataFrame derecho
+		const rightMap = new Map();
+		for (let i = 0; i < other.rowCount; i++) {
+			const val = rightCol[i];
+			if (!rightMap.has(val)) rightMap.set(val, []);
+			rightMap.get(val).push(i);
+		}
+
+		const joinedRows = [];
+		const rightHeaders = other.headers.filter((h) => h !== on);
+
+		// 2. Fase de Probe: Recorremos el DataFrame izquierdo
+		for (let i = 0; i < this.rowCount; i++) {
+			const leftVal = leftCol[i];
+			const matches = rightMap.get(leftVal);
+
+			if (matches) {
+				for (const rightIdx of matches) {
+					const newRow = {};
+					// Copiar datos de la izquierda
+					this.headers.forEach((h) => (newRow[h] = this.columns[h][i]));
+					// Copiar datos de la derecha (evitando duplicar la llave)
+					rightHeaders.forEach((h) => (newRow[h] = other.columns[h][rightIdx]));
+					joinedRows.push(newRow);
+				}
+			} else if (how === "left") {
+				const newRow = {};
+				this.headers.forEach((h) => (newRow[h] = this.columns[h][i]));
+				rightHeaders.forEach((h) => (newRow[h] = null));
+				joinedRows.push(newRow);
+			}
+		}
+
+		return DataFrame.fromObjects(joinedRows);
+	}
+	col(name) {
+    	if (!this.columns[name]) throw new Error(`Column ${name} not found`);
+		
+    	// Retornamos una instancia de Column vinculada a los datos reales
+		return new Column(name, this.columns[name], this);
+	}
 }
