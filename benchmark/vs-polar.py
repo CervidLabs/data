@@ -12,7 +12,7 @@ def main():
     # 1. CARGA DE DATOS
     df = pl.read_csv(data_path, try_parse_dates=True)
     
-    # 2. LIMPIEZA RIGUROSA (Paridad con Octopus)
+    # 2. LIMPIEZA RIGUROSA (Paridad con Cervid)
     df = df.drop_nulls(["tpep_pickup_datetime", "tpep_dropoff_datetime", "trip_distance", "fare_amount", "payment_type", "passenger_count"])
     
     df = df.filter(

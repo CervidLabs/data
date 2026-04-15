@@ -1,6 +1,6 @@
 {
-"name": "octopus-data",
-  "version": "1.0.2",
+"name": "@cervid/data",
+  "version": "1.0.0",
   "type": "module",
   "main": "./src/index.js",
   "types": "./src/index.d.ts", 
@@ -28,7 +28,7 @@
   ],
   "author": {
     "name": "Aldair Beltran",
-    "email": "aldair@albetran.com"
+    "email": "support@cervid.io"
   },
   "license": "MIT",
   "engines": {

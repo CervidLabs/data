@@ -1,5 +1,5 @@
 /**
- * OneHotEncoder Nitro - Optimizado para Octopus (TypedArrays + IDs)
+ * OneHotEncoder Nitro - Optimizado para Cervid (TypedArrays + IDs)
  */
 export class OneHotEncoder {
 	constructor(options = {}) {
@@ -17,7 +17,7 @@ export class OneHotEncoder {
 		// Usamos un loop simple para máxima velocidad
 		for (let i = 0; i < df.rowCount; i++) {
 			const id = colData[i];
-			// Solo IDs válidos (Octopus usa 0, 1, 2... para strings)
+			// Solo IDs válidos (Cervid usa 0, 1, 2... para strings)
 			if (id !== undefined && id !== null) {
 				uniqueIds.add(id);
 			}

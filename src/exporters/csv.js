@@ -46,7 +46,7 @@ export class CSVExporter {
 
 		stream.end();
 		console.log(
-			`✅ CSV exportado: ${outputPath} (${this.df.rowCount.toLocaleString()} filas)`,
+			`CSV exported: ${outputPath} (${this.df.rowCount.toLocaleString()} filas)`,
 		);
 
 		return { path: outputPath, rows: this.df.rowCount };

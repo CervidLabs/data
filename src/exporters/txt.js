@@ -54,7 +54,7 @@ export class TXTExporter {
 
 		await fs.promises.writeFile(outputPath, lines.join("\n"), "utf8");
 		console.log(
-			`✅ TXT exportado: ${outputPath} (${maxRows.toLocaleString()} filas mostradas)`,
+			`TXT exported: ${outputPath} (${maxRows.toLocaleString()} filas mostradas)`,
 		);
 
 		return { path: outputPath, rows: maxRows, totalRows: this.df.rowCount };

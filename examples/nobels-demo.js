@@ -1,11 +1,11 @@
-import { DataFrame, Octopus } from "../src/index.js";
+import { DataFrame, Cervid } from "../src/index.js";
 
 async function runDemo() {
 	try {
-		console.log("🐙 Octopus: Starting Full Analytical Pipeline...");
+		console.log("Cervid: Starting Full Analytical Pipeline...");
 
 		// 1. Ingest: Load the main Nobel dataset
-		const ds = await Octopus.read("./data/nobel.json");
+		const ds = await Cervid.read("./data/nobel.json");
 		console.log(`Loaded ${ds.rowCount} records.`);
 
 		// 2. Data Cleaning: Filter and Cast

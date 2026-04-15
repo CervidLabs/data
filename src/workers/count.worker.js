@@ -3,7 +3,6 @@ import fs from "fs";
 
 /**
  * FAST PARSE: Convierte bytes a número sin crear strings.
- * El secreto de la velocidad de Octopus.
  */
 function fastParse(buffer, start, end) {
 	let num = 0,

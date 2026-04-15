@@ -1,13 +1,13 @@
-import { Octopus } from "../src/index.js";
+import { Cervid } from "../src/index.js";
 
 async function main() {
-	console.log("🐙 OCTOPUS ANALYTICS - AUDIT MODE");
+	console.log("CERVID ANALYTICS - AUDIT MODE");
 	console.log("==============================================\n");
 
 	const startTotal = Date.now();
 
 	// 1. NITRO LOAD (8 Workers)
-	const ds_load = await Octopus.read("./data/yellow_tripdata_2019-03.csv", {
+	const ds_load = await Cervid.read("./data/yellow_tripdata_2019-03.csv", {
 		workers: 8,
 	});
 	const loadTime = (Date.now() - startTotal) / 1000;
@@ -113,7 +113,7 @@ async function main() {
 			`Q5 (Slow Hour): ${q5[0].group}h (${q5[0].avg.toFixed(2)} mph)`,
 		);
 
-	console.log(`\nOCTOPUS TOTAL TIME: ${(Date.now() - startTotal) / 1000}s`);
+	console.log(`\nCervid TOTAL TIME: ${(Date.now() - startTotal) / 1000}s`);
 }
 
 main().catch(console.error);

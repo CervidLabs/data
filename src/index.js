@@ -1,6 +1,6 @@
 // Core
 export { DataFrame } from './core/DataFrame.js';
-export { Octopus } from './core/Octopus.js';
+export { Cervid } from './core/Cervid.js';
 
 // IO
 export { readCSV, readJSON, readTXT } from './io/index.js';

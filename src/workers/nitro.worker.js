@@ -32,8 +32,6 @@ function process() {
 	let cursor = start;
 	let fieldStart = start;
 	let col = 0;
-
-	// Aquí es donde Octopus vuela: escaneo lineal de RAM
 	for (let i = start; i < end; i++) {
 		const b = data[i];
 		if (b === 44 || b === 10) {

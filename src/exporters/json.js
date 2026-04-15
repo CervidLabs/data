@@ -49,7 +49,7 @@ export class JSONExporter {
 
 		await fs.promises.writeFile(outputPath, json, "utf8");
 		console.log(
-			`✅ JSON exportado: ${outputPath} (${this.df.rowCount.toLocaleString()} filas)`,
+			`JSON exported: ${outputPath} (${this.df.rowCount.toLocaleString()} filas)`,
 		);
 
 		return { path: outputPath, rows: this.df.rowCount, format: "json" };

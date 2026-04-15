@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * Clase Series: El pilar columnar de Octopus.
+ * Clase Series: El pilar columnar de Cervid.
  * Optimizada para no usar objetos Map y trabajar sobre memoria plana.
  */
 export class Series {

@@ -1,5 +1,5 @@
 /**
- * Octopus Engine - High-performance parallel data processing for Node.js
+ * Cervid Engine - High-performance parallel data processing for Node.js
  */
 
 /** Valid comparison operators for filtering */
@@ -9,7 +9,7 @@ export type FilterOperator = 'eq' | 'gt' | 'lt' | 'gte' | 'lte' | 'contains' | '
 export type SortDirection = 'asc' | 'desc';
 
 /** Configuration for the ingestion engine */
-export interface OctopusOptions {
+export interface CervidOptions {
     /** Total slots for the internal Hash Table. Recommended: 2x unique keys. Default: 32M */
     indexerCapacity?: number;
     /** Number of records processed locally before atomic synchronization. Default: 2000 */
@@ -69,19 +69,19 @@ export interface DataFrame {
 }
 
 /** Core Engine Interface */
-export interface OctopusEngine {
+export interface CervidEngine {
     /**
      * Reads and ingests a JSON/CSV dataset using shared memory and atomic sync.
      * @param path File system path to the dataset.
      * @param options Performance and capacity tuning options.
      */
-    read(path: string, options?: OctopusOptions): Promise<DataFrame>;
+    read(path: string, options?: CervidOptions): Promise<DataFrame>;
     
-    /** Current version of the Octopus engine */
+    /** Current version of the Cervid engine */
     readonly version: string;
 }
 
-/** Main Octopus entry point */
-declare const Octopus: OctopusEngine;
+/** Main Cervid entry point */
+declare const Cervid: CervidEngine;
 
-export default Octopus;
+export default Cervid;

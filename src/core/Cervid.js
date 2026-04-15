@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export class Octopus {
+export class Cervid {
 	/**
 	 * Punto de entrada universal. Detecta el formato y elige el motor.
 	 */
@@ -104,7 +104,6 @@ export class Octopus {
 	 * Motor para JSON (Lógica de aplanamiento para Nobel/Amazon)
 	 */
 	static async _readJSON(filePath, options = {}) {
-		console.log("🐙 Octopus procesando JSON...");
 		const raw = fs.readFileSync(filePath, "utf8");
 		let data = JSON.parse(raw);
 
@@ -146,7 +145,7 @@ export class Octopus {
 			return flatten(item);
 		});
 
-		// Convertir a estructura de columnas de Octopus
+		// Convertir a estructura de columnas de Cervid
 		const headers = Object.keys(rows[0] || {});
 		const columns = {};
 		headers.forEach((h) => {

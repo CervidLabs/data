@@ -1,23 +1,23 @@
-# 🐙 Octopus Data
+#  Cervid Data
 
 **High-Performance Data Engine for Node.js**
 
 > Process millions of rows in seconds — directly in Node.js.
 
-[![Node.js Version](https://img.shields.io/node/v/octopus.svg?style=flat-square)](https://nodejs.org)
+[![Node.js Version](https://img.shields.io/node/v/cervid.svg?style=flat-square)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 
 ---
 
 ## The Bare-Metal Data Engine
 
-**Octopus** is a high-performance, vectorized data engine designed to push Node.js beyond traditional limits. By leveraging `SharedArrayBuffer` and low-level `Atomics`, Octopus processes massive datasets with **extremely low latency** and a **predictable memory footprint**.
+**Cervid/data** is a high-performance, vectorized data engine designed to push Node.js beyond traditional limits. By leveraging `SharedArrayBuffer` and low-level `Atomics`, Cervid processes massive datasets with **extremely low latency** and a **predictable memory footprint**.
 
-Unlike traditional libraries that rely on JavaScript objects, Octopus operates directly on raw memory.
+Unlike traditional libraries that rely on JavaScript objects, Cervid operates directly on raw memory.
 
 ---
 
-## Why Octopus?
+## Why Cervid?
 
 - ⚡ **Built for Node.js** — no Python bindings, no native dependencies  
 - 🧠 **Zero-Copy Architecture** — no serialization, no GC pressure  
@@ -34,29 +34,29 @@ Traditional Node.js data processing suffers from:
 - Frequent garbage collection (GC)  
 - Poor CPU cache utilization  
 
-Octopus solves this by using **TypedArrays** for columnar storage, **SharedArrayBuffer** for zero-copy memory access, and **Atomics** for lock-free parallelism.
+Cervid solves this by using **TypedArrays** for columnar storage, **SharedArrayBuffer** for zero-copy memory access, and **Atomics** for lock-free parallelism.
 
 ---
 
-## Benchmark: Octopus vs Polars vs Pandas
+## Benchmark: Cervid vs Polars vs Pandas
 
 **Dataset:** 7.8M rows NYC Taxi Trip Data (~1.5GB CSV)  
 **Environment:** Node.js 22.x | Python 3.11 | 8 Workers | Local Machine  
 
-| Metric | Octopus | Polars (Rust) | Pandas (Python) |
+| Metric | Cervid | Polars (Rust) | Pandas (Python) |
 | :--- | :---: | :---: | :---: |
 | **Total Execution Time** | **2.79s** | 5.98s | ~35.0s |
 | **Ingestion Speed** | **1.16s** | 1.88s | ~18.5s |
 | **Processing Throughput** | **~2.8M rows/s** | ~1.6M rows/s | ~0.2M rows/s |
 | **Peak Memory Usage** | **~1.2GB** | ~2.5GB+ | ~6.0GB+ |
 
-> Octopus achieves high performance by staying close to the metal and avoiding cross-language overhead (FFI).
+> Cervid/data achieves high performance by staying close to the metal and avoiding cross-language overhead (FFI).
 
 ---
 ## Installation
 
 ```bash
-npm install octopus-data
+npm install @cervid/data
 ```
 
 ---
@@ -64,10 +64,10 @@ npm install octopus-data
 ## Quick Start
 
 ```javascript
-import { Octopus } from 'octopus-data';
+import { Cervid } from '@cervid/data';
 
 async function main() {
-    const ds = await Octopus.read('./large_dataset.csv', { workers: 8 });
+    const ds = await Cervid.read('./large_dataset.csv', { workers: 8 });
 
     ds.with_columns([
         {
@@ -101,7 +101,7 @@ main().catch(console.error);
 Data is stored in contiguous memory using **TypedArrays**, allowing fast sequential access and optimal CPU cache usage. This structure minimizes memory fragmentation and maximizes data locality.
 
 ### Parallel Execution Engine
-Workloads are split across persistent **Workers**, achieving near 100% CPU utilization. By avoiding the traditional "main thread bottleneck," Octopus can process millions of rows per second without blocking the event loop.
+Workloads are split across persistent **Workers**, achieving near 100% CPU utilization. By avoiding the traditional "main thread bottleneck," Cervid can process millions of rows per second without blocking the event loop.
 
 ### Zero-Copy Memory Model
 All workers operate on shared memory via **SharedArrayBuffer**, eliminating data duplication and reducing memory pressure. This allows for seamless thread communication without the overhead of IPC serialization.
@@ -109,7 +109,7 @@ All workers operate on shared memory via **SharedArrayBuffer**, eliminating data
 ---
 ## Key Features
 
-* **Native Parquet Engine:** High-performance, zero-copy binary decoding. Octopus reads Parquet files directly into columnar memory without intermediate object conversion.
+* **Native Parquet Engine:** High-performance, zero-copy binary decoding. Cervid reads Parquet files directly into columnar memory without intermediate object conversion.
 * **Streaming Engine:** Out-of-core processing architecture. Analyze datasets that exceed physical RAM limits by leveraging chunked ingestion and shared memory buffers.
 * **Columnar Storage:** Data is stored in contiguous TypedArrays, optimizing CPU cache hits and minimizing memory fragmentation.
 ## Roadmap
