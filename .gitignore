@@ -1,6 +1,7 @@
 # Archivos grandes de datos
 data/
-
+dist/
+archive/
 # Logs
 *.log
 npm-debug.log*
@@ -9,3 +10,4 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 node_modules/
+.husky/_/

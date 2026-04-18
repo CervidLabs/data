@@ -1,11 +1,22 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
+    "target": "ES2022",
     "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "outDir": "./dist",
-    "declaration": true,
     "rootDir": "./src",
-    "strict": true
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "exactOptionalPropertyTypes": true,
+    "lib": ["ES2022"],
+    
+    "types": ["node"] 
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "archive/sort.worker.js", "archive/join.worker.js", "archive/nitro.worker.js", "archive/groupby.worker.js", "archive/filter.worker.js", "archive/count.worker.js"],
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts"]
 }

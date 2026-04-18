@@ -11,14 +11,7 @@ export { JSONExporter } from './exporters/json.js';
 export { TXTExporter } from './exporters/txt.js';
 
 // Transformers (NUEVO)
-export { 
-  StringIndexer, 
-  OneHotEncoder, 
-  LabelEncoder,
-  StandardScaler,
-  MinMaxScaler,
-  Pipeline 
-} from './transformers/index.js';
+export { StringIndexer, OneHotEncoder, LabelEncoder, StandardScaler, MinMaxScaler, Pipeline } from './transformers/index.js';
 
 // Workers
 export { ParallelExecutor } from './workers/parallel.js';

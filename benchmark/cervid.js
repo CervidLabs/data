@@ -1,4 +1,4 @@
-import { Cervid } from "../src/index.js";
+import { Cervid } from "../dist/index.js";
 
 async function main() {
 	console.log("CERVID ANALYTICS - AUDIT MODE");
@@ -7,7 +7,7 @@ async function main() {
 	const startTotal = Date.now();
 
 	// 1. NITRO LOAD (8 Workers)
-	const ds_load = await Cervid.read("./data/yellow_tripdata_2019-03.csv", {
+	const ds_load = await Cervid.read("../data/yellow_tripdata_2019-03.csv", {
 		workers: 8,
 	});
 	const loadTime = (Date.now() - startTotal) / 1000;
