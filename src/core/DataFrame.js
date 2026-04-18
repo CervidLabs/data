@@ -21,6 +21,29 @@ export class DataFrame {
 		this.colMap = data.colMap || null;
 		this.metadata = data.metadata || { indexers: {} };
 	}
+
+	static fromShared(def) {
+		const columns = {};
+		const headers = [];
+
+		for (const col of def.schema) {
+			const TA = this._dtypeToTypedArray(col.dtype);
+			columns[col.name] = new TA(def.buffer, col.offset, col.length);
+			headers.push(col.name);
+		}
+
+		return new DataFrame({
+			columns,
+			rowCount: def.rowCount,
+			headers,
+			metadata: {
+			...def.metadata,
+			source: def.source,
+			shape: def.shape
+			},
+			originalBuffer: def.buffer
+		});
+	}
 	/**
 	 * MÉTODO ESTÁTICO: Convierte un array de objetos [{}, {}]
 	 * a una instancia de DataFrame.
