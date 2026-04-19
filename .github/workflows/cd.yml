@@ -1,0 +1,39 @@
+name: CD @Cervid/release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  release:
+    name: 🚀 Release & Tagging
+    runs-on: ubuntu-latest
+    # Solo se ejecuta si el CI (tests) pasó con éxito
+    steps:
+      - name: 📂 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Necesario para que Changesets vea el historial
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🧪 Final Safety Check (Tests)
+        run: npm run test:coverage
+
+      - name: 🏷️ Create Release PR or Publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          # Si hay cambios detectados por npx changeset, publica la versión
+          publish: npx changeset publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

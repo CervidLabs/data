@@ -160,12 +160,14 @@ export class DataFrame {
     headers.forEach((h) => {
       const sample = data[0][h];
 
-      if (typeof sample === 'number') {
+      if (typeof sample === 'number' || sample === null || sample === undefined) {
         const col = new Float64Array(rowCount);
+
         for (let i = 0; i < rowCount; i++) {
-          const val = data[i][h];
-          col[i] = typeof val === 'number' ? val : 0;
+          const value = data[i][h];
+          col[i] = value === null || value === undefined ? Number.NaN : Number(value);
         }
+
         columns[h] = col;
       } else {
         columns[h] = data.map((row) => row[h]);
@@ -177,6 +179,7 @@ export class DataFrame {
 
   with_label(specs: LabelSpec[]): DataFrame {
     const newColumns = { ...this.columns };
+    const newHeaders = [...this.headers];
     const newMetadata = {
       ...this.metadata,
       indexers: { ...(this.metadata.indexers ?? {}) },
@@ -188,17 +191,21 @@ export class DataFrame {
       const indexedCol = indexer.fitTransform(this, input);
 
       newColumns[targetName] = indexedCol;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (newMetadata.indexers as any)[input] = indexer;
+
+      if (!newHeaders.includes(targetName)) {
+        newHeaders.push(targetName);
+      }
+
+      (newMetadata.indexers as Record<string, unknown>)[input] = indexer;
     }
 
     return new DataFrame({
       ...this,
       columns: newColumns,
+      headers: newHeaders,
       metadata: newMetadata,
     });
   }
-
   with_columns(specs: ColumnSpec[]): DataFrame {
     const rowCount = this.rowCount;
     for (const spec of specs) {
@@ -634,23 +641,28 @@ export class DataFrame {
       .sort((a, b) => b[1] - a[1])
       .map(([value, count]) => ({ value, count }));
   }
-
-  dropNA(): DataFrame {
+  dropNA(options: { how?: 'any' | 'all' } = {}): DataFrame {
+    const how = options.how ?? 'any';
     const indices: number[] = [];
+
     for (let i = 0; i < this.rowCount; i++) {
-      let hasNull = false;
+      let nullCount = 0;
+
       for (const h of this.headers) {
         const val = (this.columns[h] as ArrayLike<unknown>)[i];
-        if (val === null || val === undefined || (typeof val === 'number' && Number.isNaN(val))) {
-          hasNull = true;
-          break;
-        }
+
+        const isNullish = val === null || val === undefined || (typeof val === 'number' && Number.isNaN(val));
+
+        if (isNullish) nullCount++;
       }
-      if (!hasNull) indices.push(i);
+
+      if ((how === 'any' && nullCount === 0) || (how === 'all' && nullCount < this.headers.length)) {
+        indices.push(i);
+      }
     }
+
     return this._rebuildFromIndices(indices);
   }
-
   fillna(value: unknown): DataFrame {
     for (const h of this.headers) {
       const col = this.columns[h] as Array<unknown>; // Solo aplicable si es array normal o si value es numérico
