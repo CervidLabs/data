@@ -1,0 +1,11 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly" # Revisa actualizaciones cada semana
+    open-pull-requests-limit: 5
+    groups:
+      dependencies:
+        patterns:
+          - "*" # Agrupa todas las actualizaciones para no saturar el CI
