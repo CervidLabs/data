@@ -27,7 +27,7 @@ jobs:
         run: npm run lint
 
       - name: 🧪 Run Tests & Coverage
-        run: npm run test2:coverage
+        run: npm run test:coverage
         # Esto asegura que si la cobertura baja o un test falla, el CI se detiene.
 
       - name: 🔍 Security Audit
