@@ -34,7 +34,7 @@ jobs:
         uses: changesets/action@v1
         with:
           # Si no hay archivos en .changeset, intenta publicar
-          publish: npx changeset publish
+          publish: npx changeset tag
           # Estos tres parámetros son los que evitan que Husky rebote el commit automático
           commit: 'chore: version packages'
           title: 'chore: version packages'
