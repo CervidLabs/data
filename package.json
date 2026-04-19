@@ -60,14 +60,13 @@
     "lint": "eslint \"src/**/*.ts\" --max-warnings 0",
     "lint:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"src/**/*.ts\"",
-    "test": "node --import tsx --test src/**/*.spec.ts",
     "coverage": "c8 node --import tsx --test src/**/*.spec.ts",
     "prepare": "husky",
     "prepublishOnly": "npm run lint && npm run test && npm run build",
-    "test2": "vitest run",
-    "test2:watch": "vitest",
-    "test2:coverage": "vitest run --coverage",
-    "test2:ui": "vitest --ui",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui",
     "audit": "npm audit"
   },
   "lint-staged": {
