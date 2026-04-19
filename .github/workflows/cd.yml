@@ -10,12 +10,12 @@ jobs:
   release:
     name: 🚀 Release & Tagging
     runs-on: ubuntu-latest
-    # Solo se ejecuta si el CI (tests) pasó con éxito
+    # IMPORTANTE: Solo se ejecuta si el código llega a la rama principal
     steps:
       - name: 📂 Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Necesario para que Changesets vea el historial
+          fetch-depth: 0 # Necesario para que Changesets analice el historial de git
 
       - name: 🟢 Setup Node.js
         uses: actions/setup-node@v4
@@ -33,7 +33,11 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          # Si hay cambios detectados por npx changeset, publica la versión
+          # Si no hay archivos en .changeset, intenta publicar
           publish: npx changeset publish
+          # Estos tres parámetros son los que evitan que Husky rebote el commit automático
+          commit: 'chore: version packages'
+          title: 'chore: version packages'
+          setupGitUser: true # Permite que la acción configure el user de git automáticamente
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
