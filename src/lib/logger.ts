@@ -1,5 +1,5 @@
 /**
- * Niveles de severidad para el control de logs de Octopus.
+ * Niveles de severidad para el control de logs.
  */
 export enum LogLevel {
   DEBUG = 0,
@@ -27,7 +27,7 @@ class Logger {
    */
   public info(message: string, ...meta: unknown[]): void {
     if (this.level <= LogLevel.INFO) {
-      console.info(`[Octopus-INFO] ${message}`, ...meta);
+      console.info(`[CERVID-INFO] ${message}`, ...meta);
     }
   }
 
@@ -36,7 +36,7 @@ class Logger {
    */
   public warn(message: string, ...meta: unknown[]): void {
     if (this.level <= LogLevel.WARN) {
-      console.warn(`[Octopus-WARN] ${message}`, ...meta);
+      console.warn(`[CERVID-WARN] ${message}`, ...meta);
     }
   }
 
@@ -46,7 +46,7 @@ class Logger {
   public error(message: string, error?: Error | unknown): void {
     if (this.level <= LogLevel.ERROR) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`[Octopus-ERROR] ${message}`, errorMessage);
+      console.error(`[CERVID-ERROR] ${message}`, errorMessage);
     }
   }
 
@@ -55,7 +55,7 @@ class Logger {
    */
   public debug(message: string, ...meta: unknown[]): void {
     if (this.level <= LogLevel.DEBUG) {
-      console.debug(`[Octopus-DEBUG] ${message}`, ...meta);
+      console.debug(`[CERVID-DEBUG] ${message}`, ...meta);
     }
   }
 }
