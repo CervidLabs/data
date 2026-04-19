@@ -15,8 +15,8 @@
     "exactOptionalPropertyTypes": true,
     "lib": ["ES2022"],
     
-    "types": ["node"] 
+    "types": ["node", "vitest/globals"] 
   },
-  "include": ["src/**/*", "archive/sort.worker.js", "archive/join.worker.js", "archive/nitro.worker.js", "archive/groupby.worker.js", "archive/filter.worker.js", "archive/count.worker.js"],
+  "include": ["src/**/*","test/**/*", "archive/sort.worker.js", "archive/join.worker.js", "archive/nitro.worker.js", "archive/groupby.worker.js", "archive/filter.worker.js", "archive/count.worker.js"],
   "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts"]
 }

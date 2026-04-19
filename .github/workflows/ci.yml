@@ -25,3 +25,16 @@ jobs:
 
       - name: 🛡️ Run Lint (Tolerancia Cero)
         run: npm run lint
+
+      - name: 🧪 Run Tests & Coverage
+        run: npm run test2:coverage
+        # Esto asegura que si la cobertura baja o un test falla, el CI se detiene.
+
+      - name: 🔍 Security Audit
+        run: npm audit --audit-level=high
+        # Esto fallará solo si hay vulnerabilidades de nivel 'High' o 'Critical'.
+        # Es perfecto para ignorar los ruidos de nivel 'Moderate' que vimos antes.
+
+      - name: 🏗️ Build Project
+        run: npm run build
+        # Verifica que TypeScript pueda compilar todo el proyecto sin errores.
