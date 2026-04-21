@@ -1,4 +1,4 @@
-import { DataFrame } from '../core/DataFrame.js';
+import type { DataFrame } from '../core/DataFrame.js';
 
 export interface OneHotOptions {
   dropFirst?: boolean;
@@ -46,7 +46,9 @@ export class OneHotEncoder {
 
     // Ordenamos para que las columnas generadas tengan un orden predecible
     const sortedCategories = Array.from(uniqueIds).sort((a, b) => {
-      if (typeof a === 'number' && typeof b === 'number') return a - b;
+      if (typeof a === 'number' && typeof b === 'number') {
+        return a - b;
+      }
       return String(a).localeCompare(String(b));
     });
 

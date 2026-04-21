@@ -41,8 +41,8 @@ export class Series {
 
     if (this.indexer && typeof this.indexer.getStringById === 'function') {
       const strVal = this.indexer.getStringById(val);
-      // Si el diccionario no encuentra el valor, devolvemos el ID original
-      return strVal !== undefined && strVal !== null ? strVal : val;
+
+      return strVal ?? val;
     }
 
     return val;

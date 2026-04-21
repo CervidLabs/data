@@ -4,18 +4,21 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
+  ...tseslint.configs.recommendedTypeChecked,
   {
-    // 1. Ignorar archivos que no son lógica de negocio
     ignores: [
-      'dist/**', 
-      'node_modules/**', 
-      'archive/**', 
-      '**/*.d.ts', // 🛡️ Evita el error de parsing en archivos de definición
-      'eslint.config.js'
+      'dist/**',
+      'coverage/**',
+      'node_modules/**',
+      'archive/**',
+      '**/*.d.ts',
+      'eslint.config.js',
+      'eslint.config.ts',
+      'commitlint.config.js',
     ],
   },
   {
-    files: ['src/**/*.ts'], // Solo auditar el código fuente
+    files: ['src/**/*.ts'],
     languageOptions: {
       parserOptions: {
         project: './tsconfig.json',
@@ -24,28 +27,69 @@ export default tseslint.config(
     },
     rules: {
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': ['error', { 
-        'argsIgnorePattern': '^_',
-        'varsIgnorePattern': '^_'
-      }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
       '@typescript-eslint/no-floating-promises': 'error',
-      'no-console': ['warn', { allow: ['info', 'warn', 'error', 'debug', 'table'] }],
+      'no-console': [
+        'warn',
+        {
+          allow: ['info', 'warn', 'error', 'debug', 'table'],
+        },
+      ],
       'prefer-const': 'error',
-    // 🛡️ Prohíbe tipos "vacíos" o interfaces inútiles
-      '@typescript-eslint/no-empty-interface': 'error',
-
-      // 🛡️ Obliga a ser explícito en los valores de retorno de funciones públicas
-      // (Así cualquier desarrollador sabe qué devuelve un método sin mirar el código)
       '@typescript-eslint/explicit-module-boundary-types': 'error',
-
-      // 🛡️ Prohíbe el uso de 'require' (fuerza el uso de ESM / import)
       '@typescript-eslint/no-var-requires': 'error',
-
-      // 🛡️ Evita comparaciones confusas que podrían dar falsos positivos en los filtros
       'no-constant-condition': 'error',
-
-      // 🛡️ Detecta código que nunca se ejecutará (Dead Code avanzado)
       'no-unreachable': 'error',
+
+      '@typescript-eslint/no-empty-interface': 'off',
+      '@typescript-eslint/no-empty-object-type': 'error',
+
+      '@typescript-eslint/no-misused-promises': 'off',
+      '@typescript-eslint/await-thenable': 'error',
+      '@typescript-eslint/require-await': 'error',
+      '@typescript-eslint/promise-function-async': 'error',
+
+      '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+      '@typescript-eslint/no-redundant-type-constituents': 'error',
+
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+
+      '@typescript-eslint/prefer-nullish-coalescing': 'error',
+      '@typescript-eslint/prefer-optional-chain': 'error',
+      '@typescript-eslint/strict-boolean-expressions': 'off',
+      '@typescript-eslint/restrict-plus-operands': 'error',
+      '@typescript-eslint/restrict-template-expressions': 'error',
+
+      '@typescript-eslint/consistent-type-imports': 'error',
+      '@typescript-eslint/consistent-type-definitions': ['error', 'interface'],
+      '@typescript-eslint/no-inferrable-types': 'error',
+
+      '@typescript-eslint/no-shadow': 'error',
+      '@typescript-eslint/no-use-before-define': 'off',
+      'no-duplicate-imports': 'error',
+      'object-shorthand': 'error',
+      'eqeqeq': 'error',
+      'curly': 'error',
+      'no-useless-catch': 'error',
+      'no-var': 'error',
+
+      '@typescript-eslint/no-extraneous-class': 'error',
+      '@typescript-eslint/class-literal-property-style': 'error',
+
+      '@typescript-eslint/ban-ts-comment': 'error',
+      '@typescript-eslint/no-empty-function': 'error',
     },
   }
 );

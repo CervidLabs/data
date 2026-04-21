@@ -22,8 +22,12 @@ export class LabelEncoder<T = string | number> {
 
     // Ordenamos para mantener consistencia en la codificación
     this.classes_ = uniqueValues.sort((a, b) => {
-      if (a < b) return -1;
-      if (a > b) return 1;
+      if (a < b) {
+        return -1;
+      }
+      if (a > b) {
+        return 1;
+      }
       return 0;
     });
 
@@ -45,7 +49,9 @@ export class LabelEncoder<T = string | number> {
     }
 
     return values.map((v) => {
-      if (v === null || v === undefined) return -1;
+      if (v === null || v === undefined) {
+        return -1;
+      }
       // Si el valor no existe en el entrenamiento, devolvemos -1
       return this.classToIndex.get(v) ?? -1;
     });
@@ -67,7 +73,9 @@ export class LabelEncoder<T = string | number> {
     }
 
     return indices.map((idx) => {
-      if (idx < 0 || idx >= this.classes_.length) return null;
+      if (idx < 0 || idx >= this.classes_.length) {
+        return null;
+      }
       return this.classes_[idx];
     });
   }

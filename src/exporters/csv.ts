@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { DataFrame } from '../core/DataFrame.js';
+import type { DataFrame } from '../core/DataFrame.js';
 
 // 1. Definimos la interfaz estricta de configuración
 export interface CSVExporterOptions {
@@ -50,10 +50,12 @@ export class CSVExporter {
         const colData = this.df.columns[col] as ArrayLike<unknown>;
         const value = colData[i];
 
-        if (value === null || value === undefined) return '';
+        if (value === null || value === undefined) {
+          return '';
+        }
 
         // Forzamos la conversión a String para poder usar .includes() de forma segura
-        let strValue = String(value);
+        let strValue = String(value as string);
 
         // Agregamos '\n' a la regla de escape (Estándar RFC 4180 de CSV)
         if (strValue.includes(this.options.delimiter) || strValue.includes('"') || strValue.includes('\n')) {

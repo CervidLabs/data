@@ -22,10 +22,3 @@ export { MinMaxScaler, type MinMaxScalerOptions } from './transformers/MinMaxSca
 export { StandardScaler } from './transformers/StandardScaler.js';
 
 export { OneHotEncoder, type OneHotOptions } from './transformers/OneHotEncoder.js';
-
-// --- DATA IO (Lectores Independientes) ---
-export { readJSON, type ReadJSONOptions } from './io/readJSON.js';
-
-export { readTXT, type ReadTXTOptions } from './io/readTXT.js';
-
-export { readCSV, type ReadCSVOptions } from './io/readCSV.js';

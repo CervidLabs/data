@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { DataFrame } from '../core/DataFrame.js';
+import type { DataFrame } from '../core/DataFrame.js';
 
 // 1. Interfaces estrictas de configuración y retorno
 export interface JSONExporterOptions {

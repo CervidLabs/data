@@ -1,11 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 // Asumimos que los exportadores y Column también migrarán a .ts pronto
-import { CSVExporter, CSVExporterOptions } from '../exporters/csv.js';
-import { JSONExporter, JSONExporterOptions } from '../exporters/json.js';
-import { TXTExporter, TXTExporterOptions } from '../exporters/txt.js';
+import { type CSVExporterOptions, CSVExporter } from '../exporters/csv.js';
+import { type JSONExporterOptions, JSONExporter } from '../exporters/json.js';
+import { type TXTExporterOptions, TXTExporter } from '../exporters/txt.js';
 import { Column } from './Column.js';
-
+interface GroupAccumulator {
+  sum: number;
+  count: number;
+}
 // ==========================================
 // 🛡️ INTERFACES Y TIPOS MILITARIZADOS
 // ==========================================
@@ -99,8 +102,12 @@ export class DataFrame {
     this.metadata = data.metadata ?? { indexers: {} };
 
     // Si viene de otra instancia, copiamos propiedades extra
-    if (data.filePath) this.filePath = data.filePath;
-    if (data.fileType) this.fileType = data.fileType;
+    if (data.filePath) {
+      this.filePath = data.filePath;
+    }
+    if (data.fileType) {
+      this.fileType = data.fileType;
+    }
   }
 
   static fromShared(def: SharedDef): DataFrame {
@@ -144,7 +151,9 @@ export class DataFrame {
     const clean = dtype.replace(/[<>=|]/g, '');
     const TA = map[clean];
 
-    if (!TA) throw new Error(`Unsupported dtype: ${dtype}`);
+    if (!TA) {
+      throw new Error(`Unsupported dtype: ${dtype}`);
+    }
     return TA;
   }
 
@@ -216,17 +225,23 @@ export class DataFrame {
 
       if (numInputs === 1) {
         const col0 = inputs[0] as ArrayLike<number>;
-        for (let i = 0; i < rowCount; i++) newCol[i] = formula(col0[i]);
+        for (let i = 0; i < rowCount; i++) {
+          newCol[i] = formula(col0[i]);
+        }
       } else if (numInputs === 2) {
         const col0 = inputs[0] as ArrayLike<number>;
         const col1 = inputs[1] as ArrayLike<number>;
-        for (let i = 0; i < rowCount; i++) newCol[i] = formula(col0[i], col1[i]);
+        for (let i = 0; i < rowCount; i++) {
+          newCol[i] = formula(col0[i], col1[i]);
+        }
       } else if (numInputs === 4) {
         const col0 = inputs[0] as ArrayLike<number>;
         const col1 = inputs[1] as ArrayLike<number>;
         const col2 = inputs[2] as ArrayLike<number>;
         const col3 = inputs[3] as ArrayLike<number>;
-        for (let i = 0; i < rowCount; i++) newCol[i] = formula(col0[i], col1[i], col2[i], col3[i]);
+        for (let i = 0; i < rowCount; i++) {
+          newCol[i] = formula(col0[i], col1[i], col2[i], col3[i]);
+        }
       } else {
         for (let i = 0; i < rowCount; i++) {
           const args = new Array(numInputs);
@@ -237,7 +252,9 @@ export class DataFrame {
         }
       }
       this.columns[spec.name] = newCol;
-      if (!this.headers.includes(spec.name)) this.headers.push(spec.name);
+      if (!this.headers.includes(spec.name)) {
+        this.headers.push(spec.name);
+      }
     }
     return this;
   }
@@ -281,14 +298,53 @@ export class DataFrame {
   }
 
   // ==================== AGREGACIONES & UTILIDADES ====================
+  public groupByCategory(groupColumn: string, valueColumn: string): Map<string | number, GroupAccumulator> {
+    const groups = this.columns[groupColumn];
+    const values = this.columns[valueColumn];
 
+    if (groups === undefined || values === undefined) {
+      throw new Error(`Column not found: ${groups === undefined ? groupColumn : valueColumn}`);
+    }
+
+    // Tipamos el Map explícitamente para evitar 'any'
+    const acc = new Map<string | number, GroupAccumulator>();
+
+    for (let i = 0; i < this.rowCount; i++) {
+      const group = groups[i] as string | number;
+      const value = values[i];
+
+      // Check de existencia rápido
+      if (group === null || group === undefined || group === '') {
+        continue;
+      }
+
+      // Validación numérica estricta
+      if (typeof value !== 'number' || isNaN(value)) {
+        continue;
+      }
+
+      const current = acc.get(group);
+
+      if (current !== undefined) {
+        // TypeScript ya sabe que 'current' es GroupAccumulator gracias al check !== undefined
+        current.sum += value;
+        current.count += 1;
+      } else {
+        acc.set(group, { sum: value, count: 1 });
+      }
+    }
+
+    return acc;
+  }
   groupByRange(colName: string, targetCol: string, maxRange: number): { group: number; avg: number }[] {
     const groupCounts = new Uint32Array(maxRange);
     const groupSums = new Float64Array(maxRange);
     const keys = this.columns[colName] as ArrayLike<number>;
     const values = this.columns[targetCol] as ArrayLike<number>;
 
-    if (!keys || !values) return [];
+    if (!keys || !values) {
+      return [];
+    }
 
     for (let i = 0; i < this.rowCount; i++) {
       const key = Math.floor(keys[i]);
@@ -312,7 +368,9 @@ export class DataFrame {
 
     for (let i = 0; i < this.rowCount; i++) {
       const rowInputs = inputs.map((h) => (this.columns[h] as ArrayLike<unknown>)[i]);
-      if (predicate(...rowInputs)) indices.push(i);
+      if (predicate(...rowInputs)) {
+        indices.push(i);
+      }
     }
 
     const newColumns: Record<string, ColumnData> = {};
@@ -341,7 +399,9 @@ export class DataFrame {
 
     for (let i = 0; i < this.rowCount; i++) {
       const val = targetData[i];
-      if (!groups.has(val)) groups.set(val, []);
+      if (!groups.has(val)) {
+        groups.set(val, []);
+      }
       groups.get(val)!.push(i);
     }
 
@@ -358,11 +418,17 @@ export class DataFrame {
         operations.forEach((op) => {
           const outName = operations.length > 1 ? `${colName}_${op}` : colName;
 
-          if (op === 'sum') row[outName] = values.reduce((a, b) => a + b, 0);
-          else if (op === 'mean') row[outName] = values.reduce((a, b) => a + b, 0) / values.length;
-          else if (op === 'count') row[outName] = values.length;
-          else if (op === 'max') row[outName] = Math.max(...values);
-          else if (op === 'min') row[outName] = Math.min(...values);
+          if (op === 'sum') {
+            row[outName] = values.reduce((a, b) => a + b, 0);
+          } else if (op === 'mean') {
+            row[outName] = values.reduce((a, b) => a + b, 0) / values.length;
+          } else if (op === 'count') {
+            row[outName] = values.length;
+          } else if (op === 'max') {
+            row[outName] = Math.max(...values);
+          } else if (op === 'min') {
+            row[outName] = Math.min(...values);
+          }
         });
       }
       resultRows.push(row);
@@ -379,8 +445,12 @@ export class DataFrame {
       const valA = targetCol[a];
       const valB = targetCol[b];
 
-      if (valA < valB) return ascending ? -1 : 1;
-      if (valA > valB) return ascending ? 1 : -1;
+      if (valA < valB) {
+        return ascending ? -1 : 1;
+      }
+      if (valA > valB) {
+        return ascending ? 1 : -1;
+      }
       return 0;
     });
 
@@ -405,9 +475,13 @@ export class DataFrame {
 
   sum(col: string): number {
     const data = this.columns[col] as ArrayLike<number>;
-    if (!data) return 0;
+    if (!data) {
+      return 0;
+    }
     let total = 0;
-    for (let i = 0; i < this.rowCount; i++) total += data[i];
+    for (let i = 0; i < this.rowCount; i++) {
+      total += data[i];
+    }
     return total;
   }
 
@@ -417,29 +491,39 @@ export class DataFrame {
 
   max(col: string): number | null {
     const data = this.columns[col] as ArrayLike<number>;
-    if (!data) return null;
+    if (!data) {
+      return null;
+    }
     let maxVal = -Infinity;
     const len = this.rowCount;
     for (let i = 0; i < len; i++) {
-      if (data[i] > maxVal) maxVal = data[i];
+      if (data[i] > maxVal) {
+        maxVal = data[i];
+      }
     }
     return maxVal;
   }
 
   min(col: string): number | null {
     const data = this.columns[col] as ArrayLike<number>;
-    if (!data) return null;
+    if (!data) {
+      return null;
+    }
     let minVal = Infinity;
     const len = this.rowCount;
     for (let i = 0; i < len; i++) {
-      if (data[i] < minVal) minVal = data[i];
+      if (data[i] < minVal) {
+        minVal = data[i];
+      }
     }
     return minVal;
   }
 
   stats(colName: string): { count: number; sum: number; mean: number; min: number | null; max: number | null } | null {
     const col = this.columns[colName] as ArrayLike<number>;
-    if (!col) return null;
+    if (!col) {
+      return null;
+    }
 
     const len = this.rowCount;
     if (len === 0) {
@@ -453,8 +537,12 @@ export class DataFrame {
     for (let i = 0; i < len; i++) {
       const v = col[i];
       sum += v;
-      if (v < min) min = v;
-      if (v > max) max = v;
+      if (v < min) {
+        min = v;
+      }
+      if (v > max) {
+        max = v;
+      }
     }
 
     return { count: len, sum, mean: sum / len, min, max };
@@ -476,7 +564,9 @@ export class DataFrame {
   }
 
   fromArray(data: Record<string, number>[]): this {
-    if (!data || data.length === 0) return this;
+    if (!data || data.length === 0) {
+      return this;
+    }
     this.headers = Object.keys(data[0]);
     this.rowCount = data.length;
 
@@ -507,7 +597,9 @@ export class DataFrame {
 
   private _validatePath(outputPath: string, requiredExt: string): string {
     const ext = path.extname(outputPath).toLowerCase();
-    if (!ext) return outputPath + requiredExt;
+    if (!ext) {
+      return outputPath + requiredExt;
+    }
     if (ext !== requiredExt) {
       throw new Error(`Invalid extension: Output must be ${requiredExt} (received: ${ext})`);
     }
@@ -548,10 +640,14 @@ export class DataFrame {
       const numericValues: number[] = [];
       for (let i = 0; i < this.rowCount; i++) {
         const val = parseFloat(String(col[i]));
-        if (!Number.isNaN(val)) numericValues.push(val);
+        if (!Number.isNaN(val)) {
+          numericValues.push(val);
+        }
       }
 
-      if (numericValues.length === 0) continue;
+      if (numericValues.length === 0) {
+        continue;
+      }
 
       const sorted = numericValues.sort((a, b) => a - b);
       const count = sorted.length;
@@ -560,7 +656,7 @@ export class DataFrame {
 
       stats.push({
         column: h,
-        count: count,
+        count,
         mean: mean.toFixed(2),
         min: sorted[0],
         '25%': sorted[Math.floor(count * 0.25)],
@@ -653,7 +749,9 @@ export class DataFrame {
 
         const isNullish = val === null || val === undefined || (typeof val === 'number' && Number.isNaN(val));
 
-        if (isNullish) nullCount++;
+        if (isNullish) {
+          nullCount++;
+        }
       }
 
       if ((how === 'any' && nullCount === 0) || (how === 'all' && nullCount < this.headers.length)) {
@@ -754,7 +852,9 @@ export class DataFrame {
 
     const newName = `${columnName}_cumsum`;
     this.columns[newName] = newCol;
-    if (!this.headers.includes(newName)) this.headers.push(newName);
+    if (!this.headers.includes(newName)) {
+      this.headers.push(newName);
+    }
 
     return this;
   }
@@ -766,7 +866,9 @@ export class DataFrame {
     const rightMap = new Map<unknown, number[]>();
     for (let i = 0; i < other.rowCount; i++) {
       const val = rightCol[i];
-      if (!rightMap.has(val)) rightMap.set(val, []);
+      if (!rightMap.has(val)) {
+        rightMap.set(val, []);
+      }
       rightMap.get(val)!.push(i);
     }
 
@@ -796,7 +898,9 @@ export class DataFrame {
   }
 
   col(name: string): Column {
-    if (!this.columns[name]) throw new Error(`Column ${name} not found`);
+    if (!this.columns[name]) {
+      throw new Error(`Column ${name} not found`);
+    }
     return new Column(name, this.columns[name], this);
   }
   /**

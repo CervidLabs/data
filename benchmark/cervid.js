@@ -27,8 +27,7 @@ async function main() {
 				"tpep_pickup_datetime",
 			],
 			(dist, fare, drop, pick) => {
-				return dist > 0 && fare > 0 && drop - pick > 0;
-			},
+return dist > 0 && fare > 0;			},
 		)
 		.with_columns([
 			{
@@ -67,8 +66,6 @@ async function main() {
 		]);
 
 	const procTime = (Date.now() - startProc) / 1000;
-	console.log(`Processing & FE: ${procTime}s`);
-
 	// --- DATA SAMPLE ---
 	console.log("\nDATA SAMPLE (Verification):");
 	if (ds.columns.pickup_hour) {
