@@ -165,8 +165,8 @@ export class ParallelExecutor {
               resolve();
             }
           });
-          worker.on('error', (err) => reject(new Error(`Worker ${i} falló: ${err}`)));
-          worker.on('exit', (code) => {
+          worker.on('error', (err: Error) => reject(new Error(`Worker ${i} falló: ${err}`)));
+          worker.on('exit', (code: number) => {
             if (code !== 0) {
               reject(new Error(`Worker ${i} terminó con código ${code}`));
             }
