@@ -1,4 +1,4 @@
-import { DataFrame, ColumnData } from '../core/DataFrame.js';
+import { DataFrame, type ColumnData } from '../core/DataFrame.js';
 
 /**
  * StandardScaler - Estandarización de características eliminando la media
@@ -23,12 +23,16 @@ export class StandardScaler {
 
     for (const col of cols) {
       const columnData = df.columns[col];
-      if (!columnData) continue;
+      if (!columnData) {
+        continue;
+      }
 
       // Convertimos a array y filtramos números válidos
-      const values = (Array.from(columnData) as unknown[]).filter((v): v is number => typeof v === 'number' && !isNaN(v));
+      const values = Array.from(columnData).filter((v): v is number => typeof v === 'number' && !isNaN(v));
 
-      if (values.length === 0) continue;
+      if (values.length === 0) {
+        continue;
+      }
 
       // Cálculo de Media (µ)
       const mean = values.reduce((a, b) => a + b, 0) / values.length;
@@ -58,11 +62,12 @@ export class StandardScaler {
     const newColumns: Record<string, ColumnData> = { ...df.columns };
 
     for (const [col, mean] of this.mean_.entries()) {
-      const std = this.std_.get(col) || 1;
+      const std = this.std_.get(col) ?? 1;
       const scaledColName = `${col}_scaled`;
 
       // Buffer temporal para permitir .push() y evitar errores de TypedArray
-      const tempArray: (number | unknown)[] = [];
+      // number | string | null se maneja como unknown para permitir ambos casos
+      const tempArray: unknown[] = [];
       for (let i = 0; i < df.rowCount; i++) {
         const value = df.columns[col][i];
 

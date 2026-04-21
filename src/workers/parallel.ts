@@ -1,8 +1,8 @@
 import { Worker } from 'worker_threads';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { ColumnData } from './../core/DataFrame.js';
-
+import type { ColumnData } from './../core/DataFrame.js';
+type WorkerMessage = { type: 'done' } | { type: 'progress'; value: number } | { type: 'error'; error: string };
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // 1. Interfaces de Configuración y Datos
@@ -47,9 +47,9 @@ export class ParallelExecutor {
 
   constructor(filePath: string, options: ParallelOptions = {}) {
     this.filePath = filePath;
-    this.headers = options.headers || [];
-    this.numWorkers = options.numWorkers || 4;
-    this.transforms = options.transforms || [];
+    this.headers = options.headers ?? [];
+    this.numWorkers = options.numWorkers ?? 4;
+    this.transforms = options.transforms ?? [];
   }
 
   /**
@@ -58,7 +58,9 @@ export class ParallelExecutor {
   private estimateRows(view: Uint8Array): number {
     let count = 0;
     for (let i = 0; i < view.length; i++) {
-      if (view[i] === 10) count++;
+      if (view[i] === 10) {
+        count++;
+      }
     }
     return count;
   }
@@ -77,12 +79,18 @@ export class ParallelExecutor {
 
       // Sincronización Táctica: Ajustar al inicio de una línea real
       if (i > 0) {
-        while (start < size && view[start - 1] !== 10) start++;
+        while (start < size && view[start - 1] !== 10) {
+          start++;
+        }
       }
       // Ajustar al final de una línea real
-      while (end < size && view[end - 1] !== 10) end++;
+      while (end < size && view[end - 1] !== 10) {
+        end++;
+      }
 
-      if (start < end) chunks.push({ start, end });
+      if (start < end) {
+        chunks.push({ start, end });
+      }
     }
     return chunks;
   }
@@ -103,14 +111,14 @@ export class ParallelExecutor {
 
     // Compilación de Transformaciones (Pre-mapeo de índices para evitar overhead de strings en workers)
     const compiledTransforms: CompiledTransform[] = this.transforms.map((t) => {
-      const inputKeys = t.inputs || [];
+      const inputKeys = t.inputs ?? [];
       return {
         name: t.name,
         targetIdx: this.headers.indexOf(t.name),
         inputIndices: inputKeys.map((inputName) => {
           const idx = this.headers.indexOf(inputName);
           if (idx === -1) {
-            console.warn(`⚠️ Advertencia: Columna de entrada "${inputName}" no encontrada para ${t.name}`);
+            console.warn(` Advertencia: Columna de entrada "${inputName}" no encontrada para ${t.name}`);
           }
           return idx;
         }),
@@ -127,7 +135,9 @@ export class ParallelExecutor {
     for (const chunk of chunks) {
       let rowsInChunk = 0;
       for (let j = chunk.start; j < chunk.end; j++) {
-        if (view[j] === 10) rowsInChunk++;
+        if (view[j] === 10) {
+          rowsInChunk++;
+        }
       }
 
       const worker = new Worker(workerPath, {
@@ -148,21 +158,25 @@ export class ParallelExecutor {
 
     // Espera coordinada de hilos
     await Promise.all(
-      workers.map((worker, i) => {
+      workers.map(async (worker, i) => {
         return new Promise<void>((resolve, reject) => {
-          worker.on('message', (msg) => {
-            if (msg.type === 'done') resolve();
+          worker.on('message', (msg: WorkerMessage) => {
+            if (msg.type === 'done') {
+              resolve();
+            }
           });
-          worker.on('error', (err) => reject(new Error(`Worker ${i} falló: ${err}`)));
-          worker.on('exit', (code) => {
-            if (code !== 0) reject(new Error(`Worker ${i} terminó con código ${code}`));
+          worker.on('error', (err: Error) => reject(new Error(`Worker ${i} falló: ${err}`)));
+          worker.on('exit', (code: number) => {
+            if (code !== 0) {
+              reject(new Error(`Worker ${i} terminó con código ${code}`));
+            }
           });
         });
       }),
     );
 
     // Limpieza de recursos
-    workers.forEach((w) => w.terminate());
+    workers.forEach(async (w) => w.terminate());
 
     // Reconstrucción del mapa de columnas
     const columns: Record<string, ColumnData> = {};

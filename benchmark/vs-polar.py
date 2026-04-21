@@ -1,7 +1,7 @@
 import polars as pl
 import time
 
-data_path = "./data/yellow_tripdata_2019-03.csv"
+data_path = "../data/yellow_tripdata_2019-03.csv"
 
 def main():
     print("❄️ NYC YELLOW TAXI - POLARS AUDIT SYSTEM (FULL 5 Qs)")

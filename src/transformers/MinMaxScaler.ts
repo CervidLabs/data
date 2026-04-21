@@ -1,4 +1,4 @@
-import { DataFrame, ColumnData } from '../core/DataFrame.js';
+import { type ColumnData, DataFrame } from '../core/DataFrame.js';
 
 export interface MinMaxScalerOptions {
   featureRange?: [number, number];
@@ -31,12 +31,16 @@ export class MinMaxScaler {
 
     for (const col of cols) {
       const columnData = df.columns[col];
-      if (!columnData) continue;
+      if (!columnData) {
+        continue;
+      }
 
       // Filtramos valores numéricos válidos
-      const values = (Array.from(columnData) as unknown[]).filter((v): v is number => typeof v === 'number' && !isNaN(v));
+      const values = Array.from(columnData).filter((v): v is number => typeof v === 'number' && !isNaN(v));
 
-      if (values.length === 0) continue;
+      if (values.length === 0) {
+        continue;
+      }
 
       const min = Math.min(...values);
       const max = Math.max(...values);
@@ -62,11 +66,12 @@ export class MinMaxScaler {
     const newColumns: Record<string, ColumnData> = { ...df.columns };
 
     for (const [col, min] of this.min_.entries()) {
-      const diff = this.max_Diff.get(col) || 1;
+      const diff = this.max_Diff.get(col) ?? 1;
       const scaledColName = `${col}_normalized`;
 
       // Buffer temporal para evitar el error de .push() en TypedArrays
-      const tempArray: (number | unknown)[] = [];
+      // number | string | null se maneja como unknown para permitir ambos casos
+      const tempArray: unknown[] = [];
 
       for (let i = 0; i < df.rowCount; i++) {
         const value = df.columns[col][i];

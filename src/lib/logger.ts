@@ -43,7 +43,7 @@ class Logger {
   /**
    * Reporta errores críticos del motor o de datos.
    */
-  public error(message: string, error?: Error | unknown): void {
+  public error(message: string, error?: unknown): void {
     if (this.level <= LogLevel.ERROR) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`[CERVID-ERROR] ${message}`, errorMessage);

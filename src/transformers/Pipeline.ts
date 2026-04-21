@@ -1,4 +1,4 @@
-import { ColumnData, DataFrame } from '../core/DataFrame.js';
+import { type ColumnData, DataFrame } from '../core/DataFrame.js';
 
 /**
  * Interface militar para cualquier transformador de Cervid

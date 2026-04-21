@@ -1,4 +1,4 @@
-import { DataFrame, ColumnData } from './DataFrame.js';
+import type { DataFrame, ColumnData } from './DataFrame.js';
 
 export class Column {
   public name: string;
@@ -18,8 +18,8 @@ export class Column {
     const isCol = value instanceof Column;
     // Casteo duro: Le garantizamos a TS que trataremos esto como un array numérico
     const tData = this.data as Float64Array | number[];
-    const vData = isCol ? ((value as Column).data as Float64Array | number[]) : null;
-    const scalar = !isCol ? (value as number) : 0;
+    const vData = isCol ? (value.data as Float64Array | number[]) : null;
+    const scalar = !isCol ? value : 0;
 
     for (let i = 0; i < this.length; i++) {
       tData[i] += isCol && vData ? vData[i] : scalar;
@@ -30,8 +30,8 @@ export class Column {
   sub(value: number | Column): this {
     const isCol = value instanceof Column;
     const tData = this.data as Float64Array | number[];
-    const vData = isCol ? ((value as Column).data as Float64Array | number[]) : null;
-    const scalar = !isCol ? (value as number) : 0;
+    const vData = isCol ? (value.data as Float64Array | number[]) : null;
+    const scalar = !isCol ? value : 0;
 
     for (let i = 0; i < this.length; i++) {
       tData[i] -= isCol && vData ? vData[i] : scalar;
@@ -42,8 +42,8 @@ export class Column {
   mul(value: number | Column): this {
     const isCol = value instanceof Column;
     const tData = this.data as Float64Array | number[];
-    const vData = isCol ? ((value as Column).data as Float64Array | number[]) : null;
-    const scalar = !isCol ? (value as number) : 1; // Precaución: scalar por defecto a 1 si no es columna
+    const vData = isCol ? (value.data as Float64Array | number[]) : null;
+    const scalar = !isCol ? value : 1; // Precaución: scalar por defecto a 1 si no es columna
 
     for (let i = 0; i < this.length; i++) {
       tData[i] *= isCol && vData ? vData[i] : scalar;
@@ -54,8 +54,8 @@ export class Column {
   div(value: number | Column): this {
     const isCol = value instanceof Column;
     const tData = this.data as Float64Array | number[];
-    const vData = isCol ? ((value as Column).data as Float64Array | number[]) : null;
-    const scalar = !isCol ? (value as number) : 1;
+    const vData = isCol ? (value.data as Float64Array | number[]) : null;
+    const scalar = !isCol ? value : 1;
 
     for (let i = 0; i < this.length; i++) {
       const divisor = isCol && vData ? vData[i] : scalar;
@@ -95,9 +95,7 @@ export class Column {
     const newName = `${this.name}_hour`;
     this.parentDf.columns[newName] = hours;
 
-    // CRÍTICO: Agregar la nueva columna a los headers del DataFrame
-    // para que sea exportable.
-    if (!this.parentDf.headers.includes(newName)) {
+    if (!this.parentDf?.headers.includes(newName)) {
       this.parentDf.headers.push(newName);
     }
 

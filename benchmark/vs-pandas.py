@@ -2,7 +2,7 @@ import pandas as pd
 import time
 import numpy as np
 
-data_path = "./data/yellow_tripdata_2019-03.csv"
+data_path = "../data/yellow_tripdata_2019-03.csv"
 
 def main():
     print("🐼 NYC YELLOW TAXI - PANDAS AUDIT SYSTEM")

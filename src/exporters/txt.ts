@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { DataFrame } from '../core/DataFrame.js';
+import type { DataFrame } from '../core/DataFrame.js';
 
 // 1. Interfaces estrictas
 export interface TXTExporterOptions {
@@ -45,7 +45,7 @@ export class TXTExporter {
       for (let i = 0; i < maxRows; i++) {
         const rawVal = colData[i];
         // Parseo seguro sin asumir el operador ?? sobre null/undefined de forma opaca
-        const strVal = rawVal === null || rawVal === undefined ? '' : String(rawVal);
+        const strVal = rawVal === null || rawVal === undefined ? '' : String(rawVal as string);
         maxLen = Math.max(maxLen, strVal.length);
       }
       colWidths[col] = Math.min(maxLen, 50); // Límite duro de 50 caracteres
@@ -63,7 +63,7 @@ export class TXTExporter {
     for (let i = 0; i < maxRows; i++) {
       const row = columns.map((col) => {
         const rawVal = (this.df.columns[col] as ArrayLike<unknown>)[i];
-        let val = rawVal === null || rawVal === undefined ? '' : String(rawVal);
+        let val = rawVal === null || rawVal === undefined ? '' : String(rawVal as string);
 
         if (val.length > 50) {
           val = val.slice(0, 47) + '...';
