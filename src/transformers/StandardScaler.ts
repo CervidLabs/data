@@ -80,7 +80,7 @@ export class StandardScaler {
       }
 
       // Inyectamos como ColumnData (JS Array o TypedArray)
-      newColumns[scaledColName] = tempArray as ColumnData;
+      newColumns[scaledColName] = tempArray;
     }
 
     return new DataFrame({

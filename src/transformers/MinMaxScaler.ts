@@ -87,7 +87,7 @@ export class MinMaxScaler {
         }
       }
 
-      newColumns[scaledColName] = tempArray as ColumnData;
+      newColumns[scaledColName] = tempArray;
     }
 
     return new DataFrame({

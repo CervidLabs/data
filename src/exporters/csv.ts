@@ -30,34 +30,44 @@ export class CSVExporter {
     };
   }
 
+  private formatValue(value: unknown): string {
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+      return value.toString();
+    }
+
+    try {
+      return JSON.stringify(value) ?? '';
+    } catch {
+      return '';
+    }
+  }
+
   async export(outputPath: string): Promise<ExportResult> {
     const stream = fs.createWriteStream(outputPath, {
       encoding: this.options.encoding,
     });
 
-    // Usamos headers en lugar de Object.keys para garantizar el orden exacto
     const columns = this.df.headers;
 
-    // Escribir header
     if (this.options.header) {
       stream.write(columns.join(this.options.delimiter) + '\n');
     }
 
-    // Escribir filas
     for (let i = 0; i < this.df.rowCount; i++) {
       const row = columns.map((col) => {
-        // Le confirmamos a TS que vamos a leer la memoria como un arreglo indexable
         const colData = this.df.columns[col] as ArrayLike<unknown>;
         const value = colData[i];
 
-        if (value === null || value === undefined) {
-          return '';
-        }
+        let strValue = this.formatValue(value);
 
-        // Forzamos la conversión a String para poder usar .includes() de forma segura
-        let strValue = String(value as string);
-
-        // Agregamos '\n' a la regla de escape (Estándar RFC 4180 de CSV)
         if (strValue.includes(this.options.delimiter) || strValue.includes('"') || strValue.includes('\n')) {
           strValue = `"${strValue.replace(/"/g, '""')}"`;
         }
@@ -67,19 +77,19 @@ export class CSVExporter {
 
       stream.write(row.join(this.options.delimiter) + '\n');
 
-      // Liberar memoria (Dejar respirar al Event Loop de Node) cada 100k filas
       if (i % 100000 === 0 && i > 0) {
         await new Promise<void>((resolve) => setImmediate(resolve));
       }
     }
 
-    // CRÍTICO: En Vanilla JS hacías stream.end() y retornabas el objeto inmediatamente.
-    // Esto podía causar corrupción de datos si Node.js no había terminado de flushear el buffer al disco.
-    // Ahora lo envolvemos en una Promesa estricta.
-    return new Promise((resolve, reject) => {
+    return new Promise<ExportResult>((resolve, reject) => {
       stream.on('finish', () => {
         console.info(`✅ CSV exportado: ${outputPath} (${this.df.rowCount.toLocaleString()} filas)`);
-        resolve({ path: outputPath, rows: this.df.rowCount });
+
+        resolve({
+          path: outputPath,
+          rows: this.df.rowCount,
+        });
       });
 
       stream.on('error', (err) => {

@@ -573,7 +573,7 @@ export class DataFrame {
     this.headers.forEach((h) => {
       this.columns[h] = new Float64Array(new SharedArrayBuffer(this.rowCount * 8));
       for (let i = 0; i < this.rowCount; i++) {
-        (this.columns[h] as Float64Array)[i] = data[i][h];
+        this.columns[h][i] = data[i][h];
       }
     });
     return this;
@@ -694,7 +694,7 @@ export class DataFrame {
     const newColumns: Record<string, ColumnData> = {};
 
     for (const h of this.headers) {
-      newColumns[h] = (this.columns[h] as unknown[]).slice(0, limit) as ColumnData;
+      newColumns[h] = (this.columns[h] as unknown[]).slice(0, limit);
     }
 
     return new DataFrame({ ...this, columns: newColumns, rowCount: limit });
@@ -705,7 +705,7 @@ export class DataFrame {
     const newColumns: Record<string, ColumnData> = {};
 
     for (const h of this.headers) {
-      newColumns[h] = (this.columns[h] as unknown[]).slice(start, this.rowCount) as ColumnData;
+      newColumns[h] = (this.columns[h] as unknown[]).slice(start, this.rowCount);
     }
 
     return new DataFrame({

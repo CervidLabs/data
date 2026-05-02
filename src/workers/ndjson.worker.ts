@@ -31,6 +31,11 @@ interface NDJSONWorkerMessage {
   dictionaries: NDJSONWorkerColumnDictionary[];
 }
 
+interface FieldTreeNode {
+  cols: Map<string, number>;
+  children: Map<string, FieldTreeNode>;
+}
+
 // ── Module-level setup ────────────────────────────────────────────────────────
 
 const { sharedBuffer, rowStartsBuffer, rowEndsBuffer, startRow, endRow, fieldNames, kinds, numberBuffers, booleanBuffers, stringIdBuffers } =
@@ -46,10 +51,42 @@ const numCols = numberBuffers.map((b) => (b ? new Float64Array(b) : null));
 const boolBitCols = booleanBuffers.map((b) => (b ? new Uint32Array(b) : null));
 const strIdCols = stringIdBuffers.map((b) => (b ? new Int32Array(b) : null));
 
-// O(1) field-name → column-index lookup
-const fieldMap = new Map<string, number>(fieldNames.map((n, i) => [n, i]));
+// ── Field tree lookup (replaces fullKey string concatenation) ────────────────
 
-// ── Local string dictionaries (per string column) ─────────────────────────────
+function buildFieldTree(names: string[]): FieldTreeNode {
+  const root: FieldTreeNode = {
+    cols: new Map<string, number>(),
+    children: new Map<string, FieldTreeNode>(),
+  };
+
+  for (let colIdx = 0; colIdx < names.length; colIdx++) {
+    const parts = names[colIdx].split('.');
+    let node = root;
+
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i];
+      let child = node.children.get(part);
+
+      if (!child) {
+        child = {
+          cols: new Map<string, number>(),
+          children: new Map<string, FieldTreeNode>(),
+        };
+        node.children.set(part, child);
+      }
+
+      node = child;
+    }
+
+    node.cols.set(parts[parts.length - 1], colIdx);
+  }
+
+  return root;
+}
+
+const fieldTree = buildFieldTree(fieldNames);
+
+// ── Local string dictionaries (per string column) ────────────────────────────
 
 const localDicts = new Map<string, string[]>();
 const localReverse = new Map<string, Map<string, number>>();
@@ -61,7 +98,7 @@ for (let i = 0; i < fieldNames.length; i++) {
   }
 }
 
-// ── Byte-level skip utilities ─────────────────────────────────────────────────
+// ── Byte-level skip utilities ────────────────────────────────────────────────
 // All functions take/return byte offsets into fileView.
 
 /** Skip a JSON string whose opening `"` is at `i`. Returns position after closing `"`. */
@@ -150,7 +187,7 @@ function skipArr(i: number, end: number): number {
   return i;
 }
 
-// ── Fast number parsing ───────────────────────────────────────────────────────
+// ── Fast number parsing ──────────────────────────────────────────────────────
 
 /** Find the byte offset immediately after a JSON number starting at `start`. */
 function numEnd(start: number, end: number): number {
@@ -206,32 +243,36 @@ function parseNum(start: number, end: number): number {
   return parseFloat(decoder.decode(fileView.subarray(start, numEnd(start, end))));
 }
 
-// ── String writing ────────────────────────────────────────────────────────────
+// ── String writing ───────────────────────────────────────────────────────────
 
-function writeStrId(fieldName: string, value: string, colIdx: number, row: number): void {
+function writeStrId(colIdx: number, value: string, row: number): void {
   const col = strIdCols[colIdx];
   if (!col) {
     return;
   }
+
+  const fieldName = fieldNames[colIdx];
   const rev = localReverse.get(fieldName)!;
   const dict = localDicts.get(fieldName)!;
+
   let id = rev.get(value);
   if (id === undefined) {
     id = dict.length;
     dict.push(value);
     rev.set(value, id);
   }
+
   col[row] = id;
 }
 
-// ── Value writing ─────────────────────────────────────────────────────────────
+// ── Value writing ────────────────────────────────────────────────────────────
 
 /** Extract, parse, and write the value at `i` into the appropriate column buffer. */
 function writeVal(i: number, end: number, colIdx: number, row: number): number {
   const kind = kinds[colIdx];
   const fb = fileView[i]; // first byte of value — drives branching
 
-  // ── Number ──────────────────────────────────────────────────────────────────
+  // ── Number ────────────────────────────────────────────────────────────────
   if (kind === 'number') {
     const ne = numEnd(i, end);
     const col = numCols[colIdx];
@@ -241,8 +282,7 @@ function writeVal(i: number, end: number, colIdx: number, row: number): number {
     return ne;
   }
 
-  // ── Boolean (bit-packed Uint32) ──────────────────────────────────────────────
-  // Bit layout: word = row >>> 5, bit = row & 31
+  // ── Boolean (bit-packed Uint32) ───────────────────────────────────────────
   // false is the default (SharedArrayBuffer zero-initialized); only set bits for true.
   if (kind === 'boolean') {
     const col = boolBitCols[colIdx];
@@ -253,12 +293,10 @@ function writeVal(i: number, end: number, colIdx: number, row: number): number {
     return skipVal(i, end);
   }
 
-  // ── String ───────────────────────────────────────────────────────────────────
-  const fieldName = fieldNames[colIdx];
-
+  // ── String ────────────────────────────────────────────────────────────────
   if (fb === 110) {
     // 'n' → null → empty string
-    writeStrId(fieldName, '', colIdx, row);
+    writeStrId(colIdx, '', row);
     return skipVal(i, end);
   }
 
@@ -286,27 +324,24 @@ function writeVal(i: number, end: number, colIdx: number, row: number): number {
 
     const raw = decoder.decode(fileView.subarray(sStart, sEnd));
     // Only pay full JSON.parse cost when escape sequences are present (rare)
-    writeStrId(fieldName, hasEscape ? (JSON.parse(`"${raw}"`) as string) : raw, colIdx, row);
+    writeStrId(colIdx, hasEscape ? (JSON.parse(`"${raw}"`) as string) : raw, row);
     return j;
   }
 
   // number/bool landed in a string-typed column — stringify the raw bytes
   const ne = skipVal(i, end);
-  writeStrId(fieldName, decoder.decode(fileView.subarray(i, ne)), colIdx, row);
+  writeStrId(colIdx, decoder.decode(fileView.subarray(i, ne)), row);
   return ne;
 }
 
-// ── Core byte-level JSON object scanner ──────────────────────────────────────
+// ── Core byte-level JSON object scanner ─────────────────────────────────────
 
 /**
  * Scan a JSON object, starting AFTER the opening `{`.
- * Recursively descends into nested objects to build dot-notation paths.
+ * Recursively descends into nested objects using the field tree.
  * Returns position after the closing `}`.
- *
- * No JSON.parse. No intermediate JavaScript objects. All values are written
- * directly into SharedArrayBuffer columns via writeVal / writeStrId.
  */
-function scanObj(i: number, end: number, row: number, prefix: string): number {
+function scanObj(i: number, end: number, row: number, node: FieldTreeNode): number {
   while (i < end) {
     // Skip whitespace + commas between fields
     while (i < end && (fileView[i] === 32 || fileView[i] === 9 || fileView[i] === 13 || fileView[i] === 44)) {
@@ -314,15 +349,15 @@ function scanObj(i: number, end: number, row: number, prefix: string): number {
     }
 
     if (i >= end || fileView[i] === 125) {
-      return i < end ? i + 1 : i;
-    } // closing '}'
+      return i < end ? i + 1 : i; // closing '}'
+    }
 
     if (fileView[i] !== 34) {
       i++;
       continue;
     } // not a key string — skip stray byte
 
-    // ── Read key ──
+    // ── Read key ────────────────────────────────────────────────────────────
     i++; // past opening '"'
     const kStart = i;
     while (i < end) {
@@ -340,7 +375,7 @@ function scanObj(i: number, end: number, row: number, prefix: string): number {
       i++;
     } // past closing '"'
 
-    // ── Find ':' ──
+    // ── Find ':' ────────────────────────────────────────────────────────────
     while (i < end && (fileView[i] === 32 || fileView[i] === 9)) {
       i++;
     }
@@ -355,33 +390,46 @@ function scanObj(i: number, end: number, row: number, prefix: string): number {
       break;
     }
 
-    // Decode key only when it might be in the fieldMap (TextDecoder on a tiny buffer is fast)
-    const key = decoder.decode(fileView.subarray(kStart, kEnd));
-    const fullKey = prefix.length > 0 ? `${prefix}.${key}` : key;
     const fb = fileView[i];
+    const key = decoder.decode(fileView.subarray(kStart, kEnd));
 
     if (fb === 123) {
-      // Nested object — recurse with extended dot-notation prefix
-      i = scanObj(i + 1, end, row, fullKey);
-    } else if (fb === 91) {
-      // Array — store raw JSON string if field is needed, otherwise skip
-      const colIdx = fieldMap.get(fullKey);
+      // Nested object
+      const child = node.children.get(key);
+      if (child) {
+        i = scanObj(i + 1, end, row, child);
+      } else {
+        i = skipObj(i, end);
+      }
+      continue;
+    }
+
+    if (fb === 91) {
+      // Array
+      const colIdx = node.cols.get(key);
       if (colIdx !== undefined) {
         const aEnd = skipArr(i, end);
-        writeStrId(fullKey, decoder.decode(fileView.subarray(i, aEnd)), colIdx, row);
+        writeStrId(colIdx, decoder.decode(fileView.subarray(i, aEnd)), row);
         i = aEnd;
       } else {
         i = skipArr(i, end);
       }
+      continue;
+    }
+
+    // Scalar
+    const colIdx = node.cols.get(key);
+    if (colIdx !== undefined) {
+      i = writeVal(i, end, colIdx, row);
     } else {
-      const colIdx = fieldMap.get(fullKey);
-      i = colIdx !== undefined ? writeVal(i, end, colIdx, row) : skipVal(i, end);
+      i = skipVal(i, end);
     }
   }
+
   return i;
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Main ─────────────────────────────────────────────────────────────────────
 
 function main(): void {
   for (let row = startRow; row < endRow; row++) {
@@ -397,7 +445,7 @@ function main(): void {
     }
 
     try {
-      scanObj(i + 1, end, row, '');
+      scanObj(i + 1, end, row, fieldTree);
     } catch {
       // Malformed line — leave column slots at their zero-initialized defaults
     }

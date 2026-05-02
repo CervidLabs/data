@@ -29,13 +29,32 @@ export class TXTExporter {
       ...options,
     };
   }
+  private formatValue(value: unknown): string {
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+      return value.toString();
+    }
+
+    try {
+      const json = JSON.stringify(value);
+      return json ?? '';
+    } catch {
+      return '';
+    }
+  }
 
   async export(outputPath: string): Promise<TXTExportResult> {
-    const columns = this.df.headers; // Usamos headers por seguridad de orden
+    const columns = this.df.headers;
     const maxRows = Math.min(this.options.maxRows, this.df.rowCount);
     const lines: string[] = [];
 
-    // Calcular anchos de columna
     const colWidths: Record<string, number> = {};
 
     columns.forEach((col) => {
@@ -44,47 +63,43 @@ export class TXTExporter {
 
       for (let i = 0; i < maxRows; i++) {
         const rawVal = colData[i];
-        // Parseo seguro sin asumir el operador ?? sobre null/undefined de forma opaca
-        const strVal = rawVal === null || rawVal === undefined ? '' : String(rawVal as string);
+        const strVal = this.formatValue(rawVal);
+
         maxLen = Math.max(maxLen, strVal.length);
       }
-      colWidths[col] = Math.min(maxLen, 50); // Límite duro de 50 caracteres
+
+      colWidths[col] = Math.min(maxLen, 50);
     });
 
-    // Construir Header
     if (this.options.header) {
-      const headerLine = columns.map((col) => col.padEnd(colWidths[col])).join(this.options.delimiter);
+      const headerLine = columns.map((col) => col.padEnd(colWidths[col] ?? col.length)).join(this.options.delimiter);
 
       lines.push(headerLine);
       lines.push('-'.repeat(headerLine.length));
     }
 
-    // Construir Filas
     for (let i = 0; i < maxRows; i++) {
       const row = columns.map((col) => {
-        const rawVal = (this.df.columns[col] as ArrayLike<unknown>)[i];
-        let val = rawVal === null || rawVal === undefined ? '' : String(rawVal as string);
+        const colData = this.df.columns[col] as ArrayLike<unknown>;
+        const rawVal = colData[i];
+
+        let val = this.formatValue(rawVal);
 
         if (val.length > 50) {
-          val = val.slice(0, 47) + '...';
+          val = `${val.slice(0, 47)}...`;
         }
 
-        return val.padEnd(colWidths[col]);
+        return val.padEnd(colWidths[col] ?? col.length);
       });
 
       lines.push(row.join(this.options.delimiter));
     }
 
-    // Pie de página si hay datos truncados
     if (this.df.rowCount > maxRows) {
       lines.push(`\n... y ${(this.df.rowCount - maxRows).toLocaleString()} filas más`);
     }
 
-    // Escribimos todo de golpe. Aquí no hay riesgo de "Bomba de Memoria"
-    // porque maxRows siempre limita el tamaño del arreglo 'lines'.
     await fs.promises.writeFile(outputPath, lines.join('\n'), this.options.encoding);
-
-    console.info(`✅ TXT exportado: ${outputPath} (${maxRows.toLocaleString()} filas mostradas)`);
 
     return {
       path: outputPath,
